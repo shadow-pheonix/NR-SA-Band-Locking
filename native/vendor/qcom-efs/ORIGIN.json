@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/catxeon/qcom-efs-browser",
+  "commit": "9fde4f92a0cc49fc645cb70d19419f553108cb53",
+  "license": "BSD-3-Clause",
+  "files": {
+    "diag.c": "40b7abfae1ca43121dd65ad82035545f2f113ecf649aa6d89893fbb20ef3edb5",
+    "diag.h": "59b5a2f722d19211a395b1eadd4d25d5dc57bf80252f2aa9f78608e58bb01d6f",
+    "util.c": "f7fc6b791907464bf12c8628279e934ec8ada158d48f6fa12b9970ee3a157749",
+    "util.h": "d8d3d6c32f74a31eda078fa50527445bcc189dfb1f8540414c20561850fb863b"
+  },
+  "local_modifications": "See PATCHES.md."
+}
