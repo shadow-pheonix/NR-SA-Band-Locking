@@ -1,0 +1,580 @@
+# SA Band Lab: session context and handoff
+
+Last updated: **2026-10-28 UTC**.
+
+This file preserves the project's decisions, research, implementation, device
+feedback and operating details so a fresh session can continue without the
+original conversation. It is a maintained handoff, not a verbatim transcript or
+a collection of private phone reports. [AGENTS.md](AGENTS.md) requires reading
+and updating it at meaningful checkpoints and before handoff.
+
+**Required maintenance:** read this file at session start and update it
+frequently without waiting for a user reminder: after meaningful decisions,
+findings, changes, checks, phone feedback and releases, and before ending a
+substantive task. Keep the current state accurate rather than only appending
+history. Never publish credentials or private device identifiers here.
+
+## Start here: current state
+
+- Public repository: <https://github.com/shadow-pheonix/NR-SA-Band-Locking>.
+- Canonical workspace: `/home/coder/NR-SA-Band-Locking`.
+- App/package: **SA Band Lab**, `dev.saband.lab`.
+- Latest published APK: **0.9**, Android version code **9**, version name
+  `0.9-sa-test`, ARM64, minimum Android 11 / API 30, target API 34.
+- [0.9 release](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.9.0)
+  is public and marked experimental/prerelease, not draft.
+- [Direct APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.9.0/sa-band-lab-0.9-arm64.apk).
+- **Latest phone report confirms combined manual Apply of n78-only SA and
+  NR-only mode, with successful modem readback.** It also confirms that the
+  post-reboot stale-snapshot bug no longer blocks that operation.
+- **Automatic reboot reapply has not been phone-tested.** The latest report has
+  `reapply_after_reboot_enabled: false`; it contains no boot reapply evidence.
+- Android previously reported a serving n78 cell, but the latest 0.9 report
+  says serving observations have not been refreshed. Do not claim fresh live
+  registration or universal RF enforcement from preference readback alone.
+- Neighbor-band discovery remains unresolved. Android returned serving cells
+  only; the experimental QMI frequency query is rejected by this firmware.
+- No new APK or code change is requested by this handoff task. The user asked
+  to create this file and mandate frequent updates. Do not rebuild 0.9 for a
+  documentation-only update or replace the already-published artifact.
+- Session-continuity documentation is now provided by this file and the
+  repository's `AGENTS.md`; README links to both. This documentation checkpoint
+  also records the user's successful 0.9 manual Apply and permission questions.
+
+## User intent and standing decisions
+
+The original request was to use **REA on GitHub** to reverse engineer a supplied
+Cellular Pro APK and develop an independent rooted-phone band-locking app. The
+APK and research were in the `Cellular Pro` folder under the coder profile.
+
+The user initially wanted SA and NSA, with SA first. They later explicitly
+dropped NSA: they use **Jio SA**, so the application scope is **SA only**. NSA is
+still read to ensure it remains unchanged. Do not restart NSA development merely
+because old notes mention it.
+
+Requested product behavior:
+
+- Choose SIM slot, read live preferences, capture original bytes and export or
+  import a backup bound to the same phone and firmware.
+- Select individual SA bands, with **Select all** and **Deselect all**.
+- Stage **NR only (5G)** alongside the band choices. Both must take effect
+  through **Apply SA bands until reboot**, not separate checkbox-triggered SETs.
+- Show phone-supported bands separately from actual serving/nearby observations.
+  The user asked to see available nearby bands, not just the connected band;
+  this goal is only partially met because the modem exposes limited information.
+- Offer optional persistence after reboot. Implemented as **Reapply after
+  reboot**, default off, saved with a successful combined Apply. It reissues a
+  temporary setting after boot/unlock; it does not make permanent NV writes.
+- Make the project open source at the repository above, with APK assets in
+  GitHub Releases, a direct README download link, beginner instructions, tested
+  phone/root details, plausible SoC candidates and unsupported-device limits.
+
+The user asked about combining both SIMs' download speed, then said **leave it**.
+No bonding/multipath feature is planned. They also asked how much of the result
+came from reverse engineering versus online research: the recovered Cellular Pro
+route was EFS; the successful independent route is QMI based on public protocol
+research plus device testing. Do not invent a percentage or claim the supplied
+APK was shown to use the successful QMI route.
+
+### Build and collaboration preference
+
+The user explicitly said to make changes first and ask before building an APK.
+They later approved specific builds, including 0.8 and then 0.9. Those approved
+builds are complete; they are not unlimited approval for future APK builds.
+For a new change, complete source and relevant checks, then ask about building
+unless the current user request explicitly authorizes a build. Source/context
+maintenance does not itself authorize a new binary or release.
+
+The user prefers action and concise explanations over repeated confirmations.
+Once a build/release is authorized, finish the build, verification, upload and
+README update within that scope. Never ask again for the same authorization.
+
+## Target phone and observed compatibility
+
+| Item | Evidence from user reports |
+| --- | --- |
+| Phone | Xiaomi 13 Pro, model `2210132G` (`nuwa`) |
+| SoC / modem | Snapdragon 8 Gen 2 / Qualcomm Snapdragon X70 |
+| Root | Available; app invokes its helper through `su` |
+| Android | 16 |
+| Firmware | HyperOS `OS3.0.304.0.WMBINXM` |
+| Fingerprint | `Xiaomi/nuwa_in/nuwa:16/BP2A.250605.031.A3/OS3.0.304.0.WMBINXM:user/release-keys` |
+| Baseband | `MPSS.DE.3.0-GLB-855fda3454` (reported for both slots) |
+| Tested subscription | SIM 1, slot 0, Jio SA |
+| Actual discovered services | NAS QRTR node 0, port 83; DMS node 0, port 95; reported instance 1 |
+| Legacy DIAG endpoint | QRTR node 0, port 29 |
+
+Discover services at runtime; the above ports are observations, not constants.
+Both slot bindings are mock-tested; the conversation does not establish a live
+second-slot apply. Android subscription IDs are not interchangeable with slot
+numbers.
+
+The DMS capability list reported **n1, n3, n5, n7, n8, n20, n28, n38, n40,
+n41, n66, n71, n75, n77, n78, n79**. All were included in the original captured
+SA preference. This establishes reported NR capability, not local coverage or
+carrier SA provisioning on each band. **n258 was not reported as supported**;
+the app cannot add absent RF hardware support. n28 capability does not establish
+that a nearby n28 cell exists or is usable by this SIM.
+
+README compatibility candidates include Snapdragon 8 Gen 1 / 8+ Gen 1, 8 Gen 2,
+8 Gen 3, 888/888+, and 865/865+/870, but only the specified Xiaomi was tested.
+SoC similarity does not guarantee accessible QRTR/QMI or the required fields.
+The current control backend does not support MediaTek, Exynos, Tensor, Kirin or
+Unisoc modem platforms, unrooted access, iOS, Android below 11, or non-ARM64
+build targets. Missing transport/fields must disable writes rather than guess.
+
+## Research provenance: recovered EFS versus independent QMI
+
+The supplied proprietary target was **Cellular Pro 1.7.6, version code 85,
+ARM64**. Historical local evidence is under `/home/coder/Cellular Pro`.
+**That directory is research/history, not the current source of truth.** Its
+older status paragraphs predate later phone successes.
+
+REA 6.8.0 / headless JADX 0.7.1 supplied package, class and native-registration
+evidence. Much of the app is protected by a native Dalvik-style interpreter:
+`NativeUtil` loads `libQualcommAdapter.so`, dispatching through `vmInterpret`
+in `libkotlin.so`. Empty JADX bodies did not establish missing functionality.
+Supplementary ELF/Capstone, relocation, string and partial VM analysis recovered
+the relevant native paths. The exploratory VM decoder was partial; do not claim
+the entire protected application was reconstructed or dynamically exercised.
+
+Recovered chain, condensed:
+
+```text
+FragmentLock.doAction -> protected Java band handler -> TraceInfo.invoke
+  -> libd008.so NR dispatch -> local command 9 / inner command 0x0b
+  -> privileged dcidaemon -> 64-byte NR mask -> Qualcomm DIAG EFS PUT
+```
+
+The application's 256-byte internal request stores little-endian u32 command
+`0x105`, band count, band numbers and SIM slot. **It is not a raw DIAG/QMI
+packet and must not be written directly to `/dev/diag`.**
+
+The recovered daemon's ordinary NR operation writes both the SA and NSA EFS
+preferences. Slot 0 paths are:
+
+```text
+/nv/item_files/modem/mmode/nr_band_pref
+/nv/item_files/modem/mmode/nr_nsa_band_pref
+```
+
+Slot 1 uses `_Subscription01`. These are modem EFS paths, not Android files
+that shell `echo` or `cp` can modify. The recovered PUT body uses subsystem
+`4b 13`, operation `0x0026`, u32 data length 64, u32 flags `0x00080040`, u16
+sequence, 64 mask bytes, then a NUL-terminated path. Transport framing is a
+separate layer. Send success alone is not evidence of modem acceptance.
+
+This informed an independent EFS experiment. The tested firmware reports that
+SA override path absent. The working app therefore uses a **separate,
+independently implemented QMI NAS route**, researched from libqmi NAS/DMS
+definitions, qcom-band-menu and Linux QRTR. Do not describe QMI as a recovered
+Cellular Pro mechanism or infer missing EFS defaults.
+
+Historical local references, useful only if that workspace still exists:
+
+- `/home/coder/Cellular Pro/SA-RESEARCH.md`
+- `/home/coder/Cellular Pro/analysis/native-findings.md`
+- `/home/coder/Cellular Pro/analysis/GET-PACKET-REPAIR.md`
+- `/home/coder/Cellular Pro/analysis/QMI-SA-BACKEND.md`
+- `/home/coder/Cellular Pro/analysis/NR-NEIGHBOR-READ.md`
+- `/home/coder/Cellular Pro/analysis/jni-metadata/`
+
+Public provenance, licenses and primary-source links are preserved in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Original app/helper code is MIT.
+The vendored qcom-efs transport is BSD-3-Clause from
+`catxeon/qcom-efs-browser`, commit `9fde4f92a0cc49fc645cb70d19419f553108cb53`,
+with origin hashes and modification ledger retained. musl and Zig runtime
+notices are packaged. **No proprietary Cellular Pro APK, daemon, library or
+decompiled implementation is shipped in the repository or application.**
+
+## Version history and why earlier approaches failed
+
+| Version | Change and device evidence |
+| --- | --- |
+| 0.1 | Initial EFS read rejected as `bad length (0x15)`. The request omitted the modern ten-byte size/path-length/sequence prefix; the data parser was also two bytes early. Original mocks shared the mistake. |
+| 0.2 | Correct modern EFS GET and strict response framing. Phone returned a well-formed errno-2 response for the SA path: absent file, no write. |
+| 0.3 | Added independent QMI NAS/DMS backend. Service discovery worked, but the subscription bind send failed locally. |
+| 0.4 | Removed QRTR-incompatible `MSG_NOSIGNAL`, using send flags 0, with send return/errno diagnostics and a stricter test wrapper. Phone confirmed binding, live SA/NSA reads and DMS capability detection. |
+| 0.5 | Added all Android-reported NR cells, including unregistered cells when present, signal/age information and separate supported-band display. Phone exposed one serving n78 cell and no neighbors. |
+| 0.6 | Added separate read-only QMI frequency query `0x00d2`. Phone rejected it as `DeviceUnsupported (25)`. An optional EFS result appearing in the report did not establish that the main QMI backend had regressed. |
+| 0.7 | Added bulk band selection, mutation trace retention and an intermediate separately-applied NR-only control. User rejected the separate application behavior. |
+| 0.8 | Combined staged NR-only and selected bands in one Apply SET with verification/rollback. Source opened under MIT and APK published. A later phone report exposed stale expected SA after reboot; no SET was sent in that failure. |
+| 0.9 | Refreshes live expected state without replacing originals; cleans refused pending intent; adds optional boot reapply. Built, signed and released. Latest user report confirms n78 + NR-only combined manual Apply and readback. Boot reapply remains untested on phone. |
+
+### The 0.8 stale-snapshot bug and 0.9 fix
+
+After reboot, the modem returned to its original broad SA mask. Private app
+storage still held the previous n78-only `expected_sa`. Although Apply ran a
+fresh QMI probe, 0.8 passed that old saved SA value to the helper. The helper
+correctly refused with `stale_snapshot` and `write_attempted: false`. Re-reading
+also failed to reconcile an original/default mask that differed from both the
+saved expected/pending values. Failed pre-write checks could leave pending
+targets and a dirty-mode flag despite sending no SET.
+
+In 0.9, `PreferenceJournal` reconciles a successful explicit live read, preserving
+the original SA/NSA and captured earlier mode. Apply reads fresh state and uses
+its SA/mode as the expected baseline. The helper independently reads and compares
+again before SET. True concurrent changes still refuse; there is no automatic
+write retry to override them. Explicit no-write results cancel staged intent;
+uncertain writes retain pending targets until a successful live read resolves
+the outcome. The last mutation trace remains available after later reads.
+
+## Latest user-supplied 0.9 evidence
+
+The report supplied after installing the released 0.9 APK contained:
+
+```text
+helper_version: 0.9
+state: applied_verified
+ok: true
+write_attempted: true
+SA preference: n78 only
+rat_mode_preference: 64 (0x40, NR only)
+NSA preference: unchanged from captured original
+pending_sa: empty
+pending_radio_mode: -1
+original_radio_mode: 28 (0x1c)
+expected_radio_mode: 64
+radio_mode_dirty: true
+reapply_after_reboot_enabled: false
+serving observation: not refreshed
+```
+
+The trace starts with the original broad SA mask and RAT mask 28. One combined
+SET is acknowledged. The first immediate GET still reports the old state; a
+subsequent GET reports n78 and mode 64. The existing bounded convergence loop
+handles this delay. This is real-device evidence for the combined request and
+preference verification, not a reason to shorten verification to one read.
+
+`radio_mode_dirty: true` is expected here: current NR-only mode differs from the
+captured earlier mode. `rollback_verified: false` on this successful operation
+does not indicate an error; rollback was unnecessary. Original SA bytes remain
+preserved. No automatic reboot plan was enabled or demonstrated by this report.
+
+Do not publish the user's Android ID/device binding, private backup timestamps,
+raw report or SIM identifiers. This file intentionally records only the facts
+needed to reproduce and interpret the protocol behavior.
+
+## Current architecture and protocol contract
+
+### Native QMI backend
+
+`native/qmi_sa.c` implements narrow QMI over QRTR family 42. It discovers NAS
+service 3 and DMS service 2 using the current version/instance convention and
+rejects ambiguous endpoints. QMI framing is seven bytes: flags, little-endian
+u16 transaction, message and payload length. QRTR sends use flags **0**;
+`MSG_NOSIGNAL` is rejected by the relevant kernel path. Unix socket mocks alone
+did not originally catch this, so the tests wrap send to enforce the restriction.
+
+| Operation | Message / TLVs |
+| --- | --- |
+| NAS Bind Subscription | `0x0045`, TLV `0x01`: one-byte slot 0 or 1 |
+| NAS Get System Selection Preference | `0x0034`; SA `0x2c` and NSA `0x2d`, exactly 64 bytes each; RAT mode `0x11`, u16 |
+| DMS Get Band Capabilities | `0x0045`; NR `0x13`, counted u16 band list |
+| Combined Apply | NAS `0x0033`; duration `0x17 = 0` (until power cycle), SA SET TLV `0x2f` (64 bytes), RAT mode `0x11` (u16) |
+| Neighbor-frequency experiment | NAS `0x00d2`, empty payload; optional serving `0x1c` and neighbor `0x1d` lists |
+
+Masks are 512 bits / eight little-endian u64 words. Band n is bit n-1; n78 is
+byte index 9, value `0x20`, all other bytes zero for an n78-only selection.
+GET SA TLV `0x2c` is not the SET SA TLV `0x2f`. NR-only RAT mode is 64; do not
+confuse QMI mode flags with Android network-mode enumeration values.
+
+Normal Apply requires a nonempty target subset of both the captured original SA
+mask and DMS-reported NR support. It checks live SA/NSA and expected mode before
+SET, sends only the intended duration/SA/mode fields, then verifies requested
+SA/mode and unchanged reported NSA/LTE/legacy/other guarded preferences. It uses
+up to five bounded readbacks with 150 ms convergence waits. If necessary it
+reopens/binds and attempts one combined rollback to the immediately preceding
+SA/mode, verifying recovery. An unverified outcome is explicit, not success.
+One combined request does not establish atomic modem execution.
+
+Current helper commands include:
+
+```text
+qmi-probe SLOT
+qmi-apply-plan SLOT ORIGINAL_SA EXPECTED_SA ORIGINAL_NSA TARGET_SA EXPECTED_MODE TARGET_MODE
+qmi-restore SLOT ORIGINAL_SA EXPECTED_SA ORIGINAL_NSA
+qmi-neighbors SLOT
+```
+
+Older narrow `qmi-apply`, `qmi-mode` and EFS research commands remain in the CLI;
+the Android NR-only checkbox does not invoke a separate mode mutation. Mock
+transport hooks are compiled out of the production ARM64 helper.
+
+### Android/UI and state files
+
+| File | Role |
+| --- | --- |
+| `android/src/dev/saband/lab/MainActivity.java` | SIM selection, UI, staged controls, confirmation, reads, mutation, backup I/O and diagnostics |
+| `RootHelper.java` | Shared bounded `su` invocation, concurrent output draining, 32 KiB output bound, 75-second process timeout |
+| `PreferenceJournal.java` | Pure Java reconciliation of expected/pending state, immutable original SA/NSA and captured-mode handling |
+| `PreferenceStore.java` | Atomic JSON persistence, device binding, journal adapter and shared process-wide transaction lock |
+| `RadioModeSelection.java` | Resolve NR-only only when Apply is pressed; restore a known earlier mode when leaving NR-only |
+| `FiveGBands.java` | Render Android serving/unregistered NR observations without inventing detections |
+| `NrFrequencyPlan.java` | Supported-band-constrained frequency candidates, preserving overlaps |
+| `BootPlans.java`, `BootPolicy.java`, `BootReapply.java` | Opt-in per-slot plans, bounded retry policy and testable boot transaction |
+| `BootReceiver.java`, `BootLockJobService.java` | Schedule and execute background reapply after normal boot/unlock |
+
+The native executable is packaged as `lib/arm64-v8a/libsahelper.so` and extracted
+by Android to the native library directory. The suffix does not make it a JNI
+shared-library interface; root executes it as a helper.
+
+Private per-slot files include `qmi-sa-backup-slotN.json`,
+`qmi-last-change-slotN.json`, `boot-lock-slotN.json` and `boot-result-slotN.json`.
+Backups use schema 2 / `qmi-nas-sa-v1`, bound to slot, fingerprint, baseband and
+signing-key-scoped Android ID. They retain original SA/NSA, expected SA, pending
+SA, and optional original/expected/pending radio mode. Use AtomicFile writes.
+Do not overwrite captured original band bytes with a lock or guessed default.
+
+Checkbox choices are the intersection of the original captured SA preference
+and reported NR capability. If capture happened while already restricted,
+selectable bands may remain narrowed. Restore uses the exact captured SA mask,
+keeps the current radio mode, and cancels the slot's boot plan. It is not a
+factory-reset command or a combined mode restore.
+
+Unchecking NR-only and applying restores the known captured earlier mode if
+currently NR-only; otherwise it preserves the current non-NR-only mode. If the
+earlier fallback mode is unknown, refuse to guess. The latest phone's captured
+earlier value is 28, not an invented automatic-mode mask such as 92.
+
+Diagnostics keep `helper_result`, `last_preference_change`, `efs_diagnostic`,
+`five_g_observation`, `modem_frequencies`, saved reboot plan and last boot result
+separate. A failed optional EFS/frequency read must not replace the last actual
+preference-change evidence.
+
+### Reboot reapply behavior and limits
+
+The option is off by default. Only a successful Apply whose reported SA/mode
+match the target saves a per-slot boot plan. Replacing a lock cancels the old
+plan before attempting the replacement; failed or uncertain Apply cannot arm a
+replacement. **Disable reboot reapply** cancels future reapply without changing
+current modem preferences. Restore also cancels the selected slot's plan.
+
+Plans are separate from backups; imports do not arm them. They bind to the
+original backup and its device/firmware identity. A mismatch disables automatic
+reapply. Plans belong to SIM **slots**, not an immutable SIM identity: disable
+before swapping SIMs. No permanent modem-file/NV setting is written.
+
+An unexported receiver handles normal `BOOT_COMPLETED`. A JobService protected
+by `BIND_JOB_SERVICE` runs a background worker. Credential-protected plans are
+used after first unlock, not locked boot. Requested minimum delays are 30, 60
+and 120 seconds, with at most three attempts. Android/OEM scheduling may delay
+or prevent execution; root must remain granted and autostart/background settings
+may matter. Force-stop can prevent startup. Do not promise immediate lock from
+power-on or that the app continuously enforces a setting throughout the boot.
+
+Only preflight failures can be retried automatically. Retry extras include only
+the affected slots; another SIM's readiness failure must not requeue a slot
+whose mutation failed or is uncertain. Job IDs differ by attempt. UI and boot
+work serialize through the same process-wide lock. Cancellation is checked
+before SET; an in-flight helper is allowed to finish bounded verification and
+rollback instead of being interrupted. Boot results are retained separately.
+
+## EFS and location questions already answered
+
+**EFS GET refused, errno 2** means the old diagnostic could not find the modem
+EFS path. The tested device supplied a correctly framed 14-byte negative-length,
+errno-2 reply. This is not evidence of a failed QMI lock or a missing root grant.
+Do not create that absent path or infer a default mask. Its `helper_version: 0.2`
+is the legacy EFS diagnostic's label; the actual successful QMI backend is 0.9.
+The optional **Check original EFS path** button is read-only in the normal UI.
+
+**Location permission for detection:** the Android CellInfo API used by
+`requestCellInfoUpdate` / `getAllCellInfo` requires precise location permission
+because cell identities can reveal location. The UI also asks for Phone
+permission. Enable system Location for this detection path if the firmware
+requires it. SA Band Lab does not request GPS coordinates or upload location;
+the manifest has no Internet permission. QMI preference reads and band Apply
+through root do not require this Android location permission. Denying it blocks
+Android cell observations, not the root-based lock operation.
+
+Primary API reference:
+<https://developer.android.com/reference/android/telephony/TelephonyManager>.
+
+## Neighbor-band investigation: unresolved
+
+The prior fresh Android snapshot exposed one registered n78 cell, NR-ARFCN
+634080, and no NR neighbors. Individual historical PCI/signal/operator values
+are not stable properties and should not be hardcoded. Read all reported
+`CellInfoNr` entries, including unregistered ones, with operator and sample age.
+Cached results may contain other SIMs; fresh subscription-specific updates are
+preferred, and stale/unknown ages must remain explicit.
+
+The separate NAS `0x00d2` experiment was rejected with result 1 / error
+`0x0019` (25, DeviceUnsupported). That is not an empty neighbor list or an
+Android location-permission failure. Its optional list decoder expects a u8
+count and little-endian u32 NR-ARFCNs; missing versus empty lists stay distinct.
+Frequency candidates preserve overlaps such as n77/n78. Configured measurement
+frequencies do not prove measured cells, signal strength or usable coverage.
+
+There is no full RF scan, active band-by-band registration sweep, or implemented
+Qualcomm NR DIAG ML1 measurement backend. A separate DIAG measurement backend is
+a possible research direction, not a working fallback. Do not display n28/n258
+as locally detected merely because the operator might deploy them or a mask
+contains their bits. This requested feature remains an open limitation.
+
+## Release and signing record
+
+| Item | Value |
+| --- | --- |
+| 0.9 release tag | `v0.9.0` |
+| Release source commit | `3f11f776465f07342f7296a2da3875d0c721021e` |
+| Implementation commit | `bc7108bc91b33c95b2cb60e55c3a2e05ce7d4ace` |
+| Initial open-source implementation commit | `8b88557f58509f50708e9f051e291dba95b982a3` |
+| APK | `sa-band-lab-0.9-arm64.apk`, 99,399 bytes |
+| APK SHA-256 | `77afc643ca7717ca001ae39ad7e8cad22d4436d658a9930ea9b057d0178e2a44` |
+| ARM64 helper SHA-256 | `19baf7f02a837b84c64a890efae620e17adb4d0e1eee92a0ac9f8ae548dc66b4` |
+| Signing certificate SHA-256 | `c9d0695602ec1ede8245f7bcb39d3cf89ec9721927879b36b23d94c78d766fc7` |
+
+The preceding [0.8 release](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.8.0)
+remains available. Its APK SHA-256 is
+`342243e0582f5e3ef46368b6498bca856b25dc9fa6ec6873cf9bb523b2cb732a`.
+Official 0.8/0.9 builds use the same private development signing certificate, so
+the user installs over the existing app to retain private backups and the
+signing-key-scoped device binding. Do not ask the user to uninstall merely to
+work around an update issue without understanding the backup consequences.
+
+Local 0.9 artifacts are in `dist/`, including APK, ARM64 helper,
+`artifacts.json` and `SHA256SUMS.txt`. These outputs are ignored by Git. The
+artifact manifest's `device_tested: false` describes its build-time validation;
+later user feedback now confirms manual preference application. Do not rewrite
+the already-released APK, checksum or tag to change this historical metadata.
+Record subsequent evidence here and, when appropriate, in README/release notes.
+
+Release validation completed: APK signature scheme v3 and expected certificate,
+package/version/min SDK/ABI, boot receiver/service declarations, new boot classes
+in DEX, exact ARM64 helper 0.9 bytes, no test-only mock transport, packaged
+documentation/licenses, and public anonymous APK download matching the local
+signed bytes. Source-only context updates after the release do not change its
+tagged source or bundled README.
+
+## Build, checks and environment details
+
+[docs/BUILDING.md](docs/BUILDING.md) is the portable build guide. This project
+uses Bash, GCC, Python, JDK 17, Android SDK platform 34 / Build Tools 35.0.0 and
+Zig 0.13.0; it has no Gradle project. `build.sh` builds a static ARM64 helper,
+compiles Java, runs D8/aapt2, packages notices, zipaligns, signs and verifies.
+The ARM64 helper has 16 KiB load alignment. Preserve the existing signing key
+for official upgrades; self-generated keys cannot update the official app.
+
+### Last completed checks
+
+- **50 native mock test methods** passed: 15 DIAG and 35 QMI, plus native
+  transport/framing/deadline checks. These run actual helper protocol code.
+- Java host suites passed: `FiveGBandsTest`, `RadioModeSelectionTest`,
+  `PreferenceJournalTest`, and `BootReapplyTest`.
+- Regressions cover post-reboot fresh baseline, original-backup preservation,
+  real SA/NSA/mode races refusing SET, refused/uncertain journals, combined
+  verification/rollback, boot cancellation and bounded preflight-only retries.
+- Android source compilation and the full 0.9 APK build passed. Deprecated API
+  compiler notes are expected; there was no compile error.
+- The new 0.9 APK was signature/content-checked and downloaded from its public
+  release URL with an identical hash. Phone evidence is described separately.
+
+Run relevant checks after changes; do not rerun everything or build an APK just
+because a handoff document changed. Host mock tests may need permission to open
+local Unix sockets in the managed environment.
+
+Portable commands:
+
+```sh
+bash tests/run_tests.sh
+bash tests/test_five_g_bands.sh
+# Only when the user has authorized that build:
+bash build.sh
+```
+
+### Existing managed workspace tool locations
+
+These are conveniences for this environment, not portable requirements. Verify
+they still exist in a fresh session; temporary paths can disappear.
+
+| Tool | Local path |
+| --- | --- |
+| JDK 17 | `/tmp/dietlog-java` |
+| Zig 0.13.0 | `/tmp/sa-build-tools/zig-linux-x86_64-0.13.0/zig` |
+| Zig cache | `/tmp/sa-build-tools/zig-cache` |
+| SDK-layout symlink fixture | `/tmp/sa-public-sdk` |
+| Extracted SDK jars/tools | `/tmp/sa-build-tools` |
+
+The SDK fixture supplies `platforms/android-34/android.jar` and
+`build-tools/35.0.0` with aapt2, zipalign, D8, apksigner and runtime libraries.
+Use it rather than assuming all tools are on PATH. The JDK installation has the
+needed java/javac/keytool commands but is trimmed; do not assume `jar` exists.
+`build.sh` packages its class archive with Python.
+
+Examples for this environment:
+
+```sh
+SA_JAVA_HOME=/tmp/dietlog-java bash tests/test_five_g_bands.sh
+/tmp/dietlog-java/bin/javac -source 8 -target 8 -Xlint:-options \
+  -classpath /tmp/sa-build-tools/android.jar -d build/source-check \
+  android/src/dev/saband/lab/*.java
+
+# Only after build authorization. Reuse the private official keystore if present.
+ANDROID_HOME=/tmp/sa-public-sdk \
+SA_JAVA_HOME=/tmp/dietlog-java \
+SA_ZIG=/tmp/sa-build-tools/zig-linux-x86_64-0.13.0/zig \
+SA_ZIG_CACHE=/tmp/sa-build-tools/zig-cache \
+SA_KEYSTORE='/home/coder/Cellular Pro/sa-app/.signing/debug.p12' \
+bash build.sh
+```
+
+The keystore remains outside this public checkout in the historical private
+workspace. Its path is not its contents. Never publish it, dump credentials or
+put passwords in this context. An explicitly selected missing key must cause
+a failure rather than silently replacing the signing identity. See the build
+guide for `SA_KEYSTORE`, `SA_KEY_ALIAS` and `SA_KEYSTORE_PASS` handling.
+
+### GitHub and environment workflow
+
+Read applicable environment/AGENTS instructions at session start. Use available
+GitHub connector tools for repository reads and source updates. The connected
+account previously had push access, but verify actual operations rather than
+assuming credentials or permissions remain current.
+
+Source publication has used GitHub tree/commit/update-ref tools with an expected
+parent SHA and no force-push. Inspect a changed branch head before retrying a
+lease failure. A local fetch plus mixed reset was used only after verifying that
+working files matched the published tree; never reset away unrelated edits.
+The canonical checkout is a normal Git repository now, not the older untracked
+source export from the initial publication.
+
+The connector lacked binary release-upload tools, so `gh release create/edit`
+was used for draft upload, verification and public prerelease publication.
+Write multiline release notes to a file and pass `--notes-file`. No private key
+or phone report is a release asset. Upload APK plus checksum, verify source/tag
+and signing identity, publish, update README links and verify public download.
+
+CLI networking and local mock sockets previously required execution outside the
+default sandbox via the available approval mechanism. A sandboxed `gh auth
+status` reported an invalid token while approved `gh api` operations succeeded;
+do not dump tokens or start a new login just on that misleading result. Preserve
+managed proxy/CA settings. Consult the cloud runtime skill if available; the
+environment-status tool and `/etc/codex/network-policy.json` were unavailable
+here, so do not invent their status or use them as evidence of access.
+
+## Remaining work and next useful actions
+
+There is no active request to modify the app or build another APK. Continue
+from new user feedback; avoid restarting completed research or NSA work.
+
+If the user wants a reboot reapply test, have them enable **Reapply after
+reboot** before a successful Apply, keep root granted, reboot/unlock, allow
+time for the scheduled job, then read preferences and share a new report.
+Inspect the saved boot plan, `last_boot_reapply`, operation
+`boot_sa_and_radio_mode_apply`, SA mask and mode. Distinguish a historical
+manual Apply record from an actual boot attempt and verify serving state
+separately. Do not claim this test already happened.
+
+Other unresolved validation includes live serving/registration after the latest
+0.9 Apply, exact RF enforcement beyond reported preference state, restoration
+on the phone, second-slot behavior and other SoC/OEM compatibility. Nearby-band
+discovery needs a genuinely new evidence-backed measurement route; retrying the
+same rejected frequency command is not progress.
+
+When a new phone report, requirement, fix, test or release arrives, update the
+current-state, evidence and remaining-work sections here as part of that work.
+Keep the useful historical explanation while removing superseded instructions.
+Fresh-session prompt: **"Read AGENTS.md and context.md in NR-SA-Band-Locking,
+inspect the current workspace, and continue from the current state."**

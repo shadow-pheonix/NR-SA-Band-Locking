@@ -8,6 +8,11 @@ optional automatic reapply after reboot.
 **Tested on a rooted Xiaomi 13 Pro (Snapdragon 8 Gen 2).** Other devices are
 experimental; sharing the same SoC does not guarantee compatibility.
 
+For development or a fresh agent session, read [context.md](context.md) and
+[AGENTS.md](AGENTS.md) first. The context records the project history, current
+phone evidence, implementation and remaining work; keep it updated at each
+meaningful checkpoint.
+
 ## Download the APK
 
 **[Download SA Band Lab 0.9 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.9.0/sa-band-lab-0.9-arm64.apk)**
@@ -28,7 +33,8 @@ between the fresh read and its own check.
 It also adds optional **Reapply after reboot**, off by default. This feature is
 covered by host-side transaction tests; boot delivery, background root access
 and reapplication still need testing on the phone. This is an experimental
-prerelease; the 0.9 APK has not yet been tested on the device.
+prerelease. A user-supplied 0.9 phone report confirms combined n78-only SA and
+NR-only application with modem readback; that report had reboot reapply off.
 
 To use reboot reapply:
 
@@ -81,7 +87,8 @@ add unsupported bands, force carrier aggregation or combine two SIMs' speeds.
 | Confirmed on phone | QMI NAS/DMS reads, capability detection, backup capture and serving-cell observations |
 | User-reported working | SA band selection / locking |
 | Version 0.8 combined Apply | Implemented and mock-tested; a phone test of this exact combined band + mode operation has not yet been reported |
-| Version 0.8 post-reboot Apply | User reported `stale_snapshot`: modem returned to original bands while the app retained the previous n78 expectation. Fixed in 0.9; phone retest pending. |
+| Version 0.8 post-reboot Apply | User reported `stale_snapshot`: modem returned to original bands while the app retained the previous n78 expectation. Fixed in 0.9; subsequent manual Apply from the broad original state succeeded on the phone. |
+| Version 0.9 manual Apply | Phone report confirms one combined SET and verified n78-only SA plus NR-only mode; original backup and NSA preference preserved. Serving-cell refresh was not included. |
 | Version 0.9 reboot reapply | Built and host-tested; Android boot delivery and unattended root access need phone validation. |
 | Neighbor discovery | Android returned only the serving cell; the additional modem query was rejected as **DeviceUnsupported (0x0019)** |
 
