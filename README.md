@@ -2,34 +2,35 @@
 
 An open-source Android app for selecting **5G Standalone (SA) bands** on rooted
 Qualcomm phones. It reads live modem preferences, saves the original values and
-applies selected SA bands and an optional NR-only mode until reboot.
+applies selected SA bands and an optional NR-only mode until reboot, with an
+optional automatic reapply after reboot.
 
 **Tested on a rooted Xiaomi 13 Pro (Snapdragon 8 Gen 2).** Other devices are
 experimental; sharing the same SoC does not guarantee compatibility.
 
 ## Download the APK
 
-**[Download SA Band Lab 0.8 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.8.0/sa-band-lab-0.8-arm64.apk)**
+**[Download SA Band Lab 0.9 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.9.0/sa-band-lab-0.9-arm64.apk)**
 
-[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.8.0)
+[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.9.0)
 · [All releases](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases)
 
 Download the `.apk` file to install the app. GitHub's **Source code (zip)** is for
 developers and cannot be installed as an Android app.
 
-### Upcoming 0.9 source changes — APK not released yet
+### Version 0.9: reboot fix and optional reapply
 
-The current source fixes an Apply failure after reboot: it uses freshly read
+Version 0.9 fixes an Apply failure after reboot: it uses freshly read
 modem preferences instead of an obsolete saved n78 mask. The original backup
 stays unchanged, and the helper still refuses a change if preferences move
 between the fresh read and its own check.
 
-The source also adds optional **Reapply after reboot**, off by default. This
-feature is covered by host-side transaction tests; boot delivery, background
-root access and reapplication still need testing on the phone. The download
-above remains **0.8**, which does not include these changes.
+It also adds optional **Reapply after reboot**, off by default. This feature is
+covered by host-side transaction tests; boot delivery, background root access
+and reapplication still need testing on the phone. This is an experimental
+prerelease; the 0.9 APK has not yet been tested on the device.
 
-To use reboot reapply in the upcoming build:
+To use reboot reapply:
 
 1. Read preferences, select bands and choose **NR only** as usual.
 2. Tick **Reapply after reboot**, then use the same **Apply SA bands until
@@ -58,6 +59,7 @@ Backup imports do not enable automatic reapply.
 - Offers individual band checkboxes plus **Select all / Deselect all**.
 - Stages the **NR only (5G)** checkbox alongside the band selection.
 - Applies both choices with **Apply SA bands until reboot**, in one modem SET.
+- Optionally reapplies the verified bands and radio mode after boot and unlock.
 - Verifies preference readback and attempts rollback if verification fails.
 - Restores the exact captured SA mask, without guessing factory defaults.
 - Displays serving and nearby 5G cells when Android exposes them.
@@ -79,13 +81,15 @@ add unsupported bands, force carrier aggregation or combine two SIMs' speeds.
 | Confirmed on phone | QMI NAS/DMS reads, capability detection, backup capture and serving-cell observations |
 | User-reported working | SA band selection / locking |
 | Version 0.8 combined Apply | Implemented and mock-tested; a phone test of this exact combined band + mode operation has not yet been reported |
-| Version 0.8 post-reboot Apply | User reported `stale_snapshot`: modem returned to original bands while the app retained the previous n78 expectation. Fixed in upcoming source. |
+| Version 0.8 post-reboot Apply | User reported `stale_snapshot`: modem returned to original bands while the app retained the previous n78 expectation. Fixed in 0.9; phone retest pending. |
+| Version 0.9 reboot reapply | Built and host-tested; Android boot delivery and unattended root access need phone validation. |
 | Neighbor discovery | Android returned only the serving cell; the additional modem query was rejected as **DeviceUnsupported (0x0019)** |
 
 Successful preference readback proves that the modem reports the requested
 preference. It does not independently prove RF enforcement, registration on every
 selected band, voice availability or behavior after a reboot. Re-read after a
-reboot; the released 0.8 app requests temporary settings and does not reapply them.
+reboot. Settings use a temporary modem lifetime. With **Reapply after reboot**
+enabled, the app requests those settings again after boot and unlock.
 
 ## Devices that might work
 
@@ -163,7 +167,9 @@ the failure. Do not replace a missing backup with values from another phone.
    band(s) you want, such as n78 when you know n78 is available locally.
 3. Leave **NR only (5G)** unticked to keep the current non-NR-only mode. Tick it
    if you want to request 5G only, with no LTE fallback.
-4. Tap **Apply SA bands until reboot**, review the confirmation and tap Apply.
+4. Leave **Reapply after reboot** unticked for a temporary lock, or tick it to
+   save the verified selection for boot-time reapply. Tap **Apply SA bands until
+   reboot**, review the confirmation and tap Apply.
    **Ticking or unticking NR only does nothing until this Apply button is used.**
 5. Wait for verification. The app checks both the SA mask and radio mode and
    compares other guarded preferences. Copy the report if anything fails.
@@ -195,12 +201,14 @@ does not provide an exhaustive scan of all nearby 5G bands.
   **Apply SA bands until reboot**. The app restores the earlier radio mode it
   captured. If no earlier mode is known, it refuses to guess one.
 - To restore the original SA band mask: tap **Restore captured SA preferences**.
-  This keeps the current radio mode; it does not apply a pending checkbox choice.
+  This disables reboot reapply for that SIM slot and keeps the current radio
+  mode; it does not apply a pending checkbox choice.
 - Before uninstalling, restore the settings you want and retain your exported
   backup. Import only your own backup from the same device and firmware.
-- If a change loses service, restore the captured settings if possible. A reboot
-  ends the requested temporary lifetime, but this is not a factory reset or a
-  guarantee against an OEM reapplying other preferences.
+- If a change loses service, use **Disable reboot reapply**, then restore the
+  captured settings if possible. A reboot ends the requested temporary lifetime,
+  but an enabled boot plan can request the lock again after unlock. This is not
+  a factory reset or a guarantee against an OEM reapplying other preferences.
 
 ## Troubleshooting
 

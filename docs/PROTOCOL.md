@@ -41,7 +41,7 @@ that preflight state immediately before SET, so a concurrent change still
 refuses the write. A response explicitly reporting no write cancels the staged
 intent; an uncertain write retains it until a successful live read resolves it.
 
-## Optional boot reapply (upcoming 0.9)
+## Optional boot reapply (0.9)
 
 **Reapply after reboot** is off by default and saved only after verified Apply.
 Private per-slot plan files are separate from backups; importing a backup does
