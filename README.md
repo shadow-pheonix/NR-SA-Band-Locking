@@ -17,6 +17,40 @@ experimental; sharing the same SoC does not guarantee compatibility.
 Download the `.apk` file to install the app. GitHub's **Source code (zip)** is for
 developers and cannot be installed as an Android app.
 
+### Upcoming 0.9 source changes — APK not released yet
+
+The current source fixes an Apply failure after reboot: it uses freshly read
+modem preferences instead of an obsolete saved n78 mask. The original backup
+stays unchanged, and the helper still refuses a change if preferences move
+between the fresh read and its own check.
+
+The source also adds optional **Reapply after reboot**, off by default. This
+feature is covered by host-side transaction tests; boot delivery, background
+root access and reapplication still need testing on the phone. The download
+above remains **0.8**, which does not include these changes.
+
+To use reboot reapply in the upcoming build:
+
+1. Read preferences, select bands and choose **NR only** as usual.
+2. Tick **Reapply after reboot**, then use the same **Apply SA bands until
+   reboot** button. Only a successful, verified Apply saves a reboot plan.
+3. Keep root permanently granted to the app. Allow the app to start and run in
+   the background in your phone's app settings if needed.
+4. After reboot, unlock the phone once. The app requests a background job after
+   at least 30 seconds; Android may delay it. It reads the modem again, reapplies
+   the saved bands and radio mode together, and verifies them. This is a
+   temporary setting reapplied by the app, not a permanent modem-file change.
+5. Open the app and read preferences to see **Saved reboot reapply** and the
+   last boot attempt. Check the serving cell separately.
+
+For a temporary lock, leave the option unticked and Apply. To cancel an existing
+boot plan without changing the current lock, tap **Disable reboot reapply**.
+**Restore captured SA preferences** also cancels that slot's boot plan. Each
+plan belongs to its **SIM slot**, so disable it before changing the SIM in that
+slot. Firmware/device mismatch disables automatic reapply. Root denial,
+force-stopping the app or background restrictions can prevent it from running.
+Backup imports do not enable automatic reapply.
+
 ## What the app does
 
 - Reads separate live SA/NSA preferences and hardware-supported NR bands.
@@ -45,12 +79,13 @@ add unsupported bands, force carrier aggregation or combine two SIMs' speeds.
 | Confirmed on phone | QMI NAS/DMS reads, capability detection, backup capture and serving-cell observations |
 | User-reported working | SA band selection / locking |
 | Version 0.8 combined Apply | Implemented and mock-tested; a phone test of this exact combined band + mode operation has not yet been reported |
+| Version 0.8 post-reboot Apply | User reported `stale_snapshot`: modem returned to original bands while the app retained the previous n78 expectation. Fixed in upcoming source. |
 | Neighbor discovery | Android returned only the serving cell; the additional modem query was rejected as **DeviceUnsupported (0x0019)** |
 
 Successful preference readback proves that the modem reports the requested
 preference. It does not independently prove RF enforcement, registration on every
 selected band, voice availability or behavior after a reboot. Re-read after a
-reboot; the app requests temporary settings and does not promise persistence.
+reboot; the released 0.8 app requests temporary settings and does not reapply them.
 
 ## Devices that might work
 

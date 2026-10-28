@@ -39,7 +39,9 @@ public class MainActivity extends Activity {
     private TextView status, current, radio, supported, modemRadio;
     private Spinner sim;
     private Button apply, restore, selectAll, deselectAll;
-    private CheckBox nrOnly;
+    private CheckBox nrOnly, persistLock;
+    private TextView bootStatus;
+    private JSONObject activeBootPlan, lastBootResult;
     private boolean busy;
     private volatile boolean alive = true;
     private volatile int slot;
@@ -62,7 +64,7 @@ public class MainActivity extends Activity {
         setContentView(scroll);
         label("SA BAND LAB",13,Color.rgb(84,211,190));
         TextView title = label("Your SA band preferences",27,ink); title.setTypeface(null,Typeface.BOLD);
-        label("Xiaomi 13 Pro · Snapdragon 8 Gen 2\nExperimental build 0.8 · root required for modem reads and locking",14,muted);
+        label("Xiaomi 13 Pro · Snapdragon 8 Gen 2\nExperimental build 0.9 · root required for modem reads and locking",14,muted);
         label("Read live SA preferences first. Choose SA bands and NR-only mode, then apply both until reboot.",15,ink);
         sim = new Spinner(this);
         sim.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"SIM 1 · slot 0","SIM 2 · slot 1"}));
@@ -72,7 +74,7 @@ public class MainActivity extends Activity {
             public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long id) {
                 slot=position; probe=null; backup=null; bandBox.removeAllViews(); bands.clear();
                 lastHelperResult=null;lastReport="No root operation has run for this SIM.";
-                lastChange=null;lastEfsResult=null;nrOnly.setChecked(false);
+                lastChange=null;lastEfsResult=null;nrOnly.setChecked(false);persistLock.setChecked(false);activeBootPlan=null;lastBootResult=null;bootStatus.setText("Read preferences to check reboot reapply for this SIM slot.");
                 lastBandObservation=null;bandSnapshot=null;
                 lastModemFrequencies=null;modemRadio.setText("Read the modem's neighbor-frequency list if Android reports serving cells only.");
                 radio.setText("Refresh to see serving and nearby 5G cells reported for this SIM.");
@@ -94,6 +96,17 @@ public class MainActivity extends Activity {
         nrOnly=new CheckBox(this);nrOnly.setText("NR only (5G) · until reboot");nrOnly.setTextColor(ink);nrOnly.setTextSize(16);content.addView(nrOnly);
         nrOnly.setOnClickListener(v -> status.setText("NR-only choice updated. Press Apply SA bands until reboot to apply it with your selected bands."));
         label("NR only disables LTE fallback. Checkbox and band changes take effect together when you press Apply. Untick and apply to restore the captured earlier radio mode.",13,muted);
+        persistLock=new CheckBox(this);persistLock.setText("Reapply after reboot");persistLock.setTextColor(ink);persistLock.setTextSize(16);content.addView(persistLock);
+        persistLock.setOnClickListener(v -> status.setText("Reboot choice is pending. Press Apply to save it with a verified band and radio-mode selection."));
+        label("Off: temporary until reboot. On: reapply the verified bands and radio mode after boot and first unlock. Saved with Apply for this SIM slot. Root must remain granted; Android may delay background work.",13,muted);
+        bootStatus=label("Read preferences to check reboot reapply for this SIM slot.",13,muted);
+        button("Disable reboot reapply",() -> {
+            final int s=slot;
+            work("Disabling reboot reapply…",() -> {
+                BootPlans.clear(this,s);
+                ui(() -> {activeBootPlan=null;persistLock.setChecked(false);showBootStatus();status.setText("Reboot reapply disabled for this SIM slot. Current modem preferences were not changed.");});
+            });
+        });
         label("Choose SA bands",19,ink);
         label("Choices are the intersection of your captured SA preference and the modem's NR capability list. An existing lock may narrow this list. Capabilities do not prove SA availability on your network.",13,muted);
         bandBox = new LinearLayout(this); bandBox.setOrientation(LinearLayout.VERTICAL); content.addView(bandBox);
@@ -133,6 +146,7 @@ public class MainActivity extends Activity {
         for(CheckBox b:bands)b.setEnabled(!busy);
         boolean ready=probe!=null&&probe.optBoolean("ok")&&backup!=null&&matchesDevice(backup);
         if(nrOnly!=null)nrOnly.setEnabled(!busy&&ready&&probe.optInt("rat_mode_preference",-1)>0);
+        if(persistLock!=null)persistLock.setEnabled(!busy&&ready);
         if(selectAll!=null)selectAll.setEnabled(!busy&&ready&&!bands.isEmpty());
         if(deselectAll!=null)deselectAll.setEnabled(!busy&&ready&&!bands.isEmpty());
         if(apply!=null)apply.setEnabled(!busy&&ready&&probe.optBoolean("write_ready")&&!bands.isEmpty());
@@ -143,7 +157,7 @@ public class MainActivity extends Activity {
     private void work(String text,Job job) {
         busy=true;status.setText(text);refreshEnabled();
         worker.execute(() -> {
-            try {job.run();}
+            try {synchronized(PreferenceStore.LOCK) {job.run();}}
             catch(Exception e) {lastHelperResult=null;lastReport="ERROR: "+e.toString();ui(() -> status.setText(lastReport));}
             finally {ui(() -> {busy=false;refreshEnabled();});}
         });
@@ -160,29 +174,8 @@ public class MainActivity extends Activity {
         try {stream=f.startWrite();stream.write(b.toString(2).getBytes(StandardCharsets.UTF_8));f.finishWrite(stream);}
         catch(Exception e) {if(stream!=null)f.failWrite(stream);throw e;}
     }
-    private static String quote(String s) {return "'"+s.replace("'","'\\''")+"'";}
     private JSONObject invoke(String... args) throws Exception {
-        File helper=new File(getApplicationInfo().nativeLibraryDir,"libsahelper.so");
-        if(!helper.isFile())throw new IOException("ARM64 root helper was not extracted by Android.");
-        StringBuilder command=new StringBuilder(quote(helper.getAbsolutePath()));
-        for(String a:args)command.append(' ').append(quote(a));
-        Process p=new ProcessBuilder("su","-c",command.toString()).redirectErrorStream(true).start();
-        ByteArrayOutputStream data=new ByteArrayOutputStream();AtomicReference<IOException> readError=new AtomicReference<>();
-        // Drain while the helper runs: a long diagnostic reply must not fill
-        // the subprocess pipe while its parent is waiting for it to exit.
-        Thread reader=new Thread(() -> {
-            try(InputStream in=p.getInputStream()) {byte[] chunk=new byte[2048];int n;
-                while((n=in.read(chunk))!=-1) {if(data.size()+n>32768)throw new IOException("Unexpectedly large helper output.");data.write(chunk,0,n);}
-            } catch(IOException e) {readError.set(e);}
-        },"sa-helper-output");reader.setDaemon(true);reader.start();
-        if(!p.waitFor(75,TimeUnit.SECONDS)) {p.destroyForcibly();reader.join(1000);throw new IOException("Root helper timed out. Retain the backup and read preferences before retrying.");}
-        reader.join(2000);
-        if(reader.isAlive()) {p.getInputStream().close();throw new IOException("Helper output did not close. Read preferences before retrying.");}
-        if(readError.get()!=null)throw readError.get();
-        String output=data.toString("UTF-8");lastReport=output;
-        JSONObject result=null;
-        for(String line:output.split("\n"))if(line.trim().startsWith("{")) {try {result=new JSONObject(line.trim());}catch(Exception ignored) {}}
-        if(result==null)throw new IOException("No helper response. Grant root to SA Band Lab. Output: "+output);
+        JSONObject result=RootHelper.invoke(this,args);lastReport=result.toString();
         if("efs-get39-v2".equals(result.optString("read_profile")))lastEfsResult=result;
         else if("qmi-nas-sa-v1".equals(result.optString("read_profile")))lastHelperResult=result;
         return result;
@@ -195,25 +188,23 @@ public class MainActivity extends Activity {
                 if(b==null) {
                     b=new JSONObject();b.put("schema",2);b.put("read_profile",r.getString("read_profile"));b.put("slot",s);b.put("fingerprint",Build.FINGERPRINT);b.put("baseband",baseband());b.put("device_binding",deviceBinding());b.put("created_ms",System.currentTimeMillis());
                     b.put("original_sa",r.getString("sa_hex"));b.put("expected_sa",r.getString("sa_hex"));b.put("original_nsa",r.getString("nsa_hex"));b.put("pending_sa","");saveBackup(s,b);
-                } else if(matchesDevice(b)&&r.getString("nsa_hex").equals(b.optString("original_nsa"))) {
-                    String read=r.getString("sa_hex"),pending=b.optString("pending_sa");
-                    if(read.equals(pending)||read.equals(b.optString("expected_sa"))) {b.put("expected_sa",read);b.put("pending_sa","");saveBackup(s,b);}
                 }
-                if(b!=null&&matchesDevice(b)&&b.has("original_radio_mode")) {
-                    int mode=r.optInt("rat_mode_preference",-1);
-                    if(mode==b.optInt("expected_radio_mode",-2)||mode==b.optInt("pending_radio_mode",-2)||mode==b.optInt("original_radio_mode",-2)) {
-                        b.put("expected_radio_mode",mode);b.put("pending_radio_mode",-1);b.put("radio_mode_dirty",mode!=b.getInt("original_radio_mode"));saveBackup(s,b);
-                    }
+                if(matchesDevice(b)) {
+                    PreferenceJournal journal=journal(b);
+                    try {journal.refresh(snapshot(r));storeJournal(b,journal);saveBackup(s,b);}
+                    catch(IllegalArgumentException e) {r.put("ok",false);r.put("write_ready",false);r.put("error",e.getMessage());}
                 }
             }
-            JSONObject selected=b,change=loadLastChange(s);
-            ui(() -> {probe=r;backup=selected;lastChange=change;status.setText(r.optBoolean("ok")?(r.optBoolean("write_ready")?"Live preferences read. Backup and NR capability list are ready.":"Live preferences backed up. Apply disabled: "+r.optString("capability_error")):r.optString("error","Read failed.")+"\nNo preference SET was sent. Copy the diagnostic report above.");showPreferences();});
+            JSONObject selected=b,change=loadLastChange(s),plan=BootPlans.load(this,s),bootResult=PreferenceStore.read(this,"boot-result-slot"+s+".json");
+            ui(() -> {probe=r;backup=selected;lastChange=change;activeBootPlan=plan;lastBootResult=bootResult;persistLock.setChecked(plan!=null);showBootStatus();status.setText(r.optBoolean("ok")?(r.optBoolean("write_ready")?"Live preferences read. Backup and NR capability list are ready.":"Live preferences backed up. Apply disabled: "+r.optString("capability_error")):r.optString("error","Read failed.")+"\nNo preference SET was sent. Copy the diagnostic report above.");showPreferences();});
         });
     }
     private void showPreferences() {
         if(nrOnly!=null)nrOnly.setChecked(probe!=null&&probe.optInt("rat_mode_preference",-1)==64);
         bandBox.removeAllViews();bands.clear();
-        if(probe==null||!probe.optBoolean("ok")) {current.setText("Transport or preference read failed. Copy the diagnostic report.");return;}
+        if(probe==null||!probe.optBoolean("ok")) {
+            current.setText(probe!=null&&probe.has("sa_hex")?"Last observed SA preference: "+bandNames(probe.optString("sa_hex"))+"\nRadio mode: RAT mask "+probe.optInt("rat_mode_preference",-1)+"\nRead live SA preferences before retrying.":"Transport or preference read failed. Read live SA preferences again or copy the diagnostic report.");return;
+        }
         supported.setText("Phone-supported 5G bands: "+bandNames(probe.optString("supported_nr_hex"))+"\nSupport does not establish local coverage. Refresh above to see detected cells.");
         current.setText("SA preference: "+bandNames(probe.optString("sa_hex"))+"\nRadio mode: "+(probe.optInt("rat_mode_preference",-1)==64?"NR only":"RAT mask "+probe.optInt("rat_mode_preference",-1))+"\nTransport: "+probe.optString("transport"));
         if(backup==null)return;
@@ -251,52 +242,70 @@ public class MainActivity extends Activity {
         for(CheckBox b:bands)if(b.isChecked()) {int n=(Integer)b.getTag()-1;mask[n/8]|=(byte)(1<<(n%8));count++;}
         if(count==0) {status.setText("Select at least one SA band.");return;}
         StringBuilder h=new StringBuilder();for(byte v:mask)h.append(String.format(Locale.ROOT,"%02x",v&255));final String target=h.toString();
-        final boolean nrRequested=nrOnly.isChecked();
+        final boolean nrRequested=nrOnly.isChecked(),persistRequested=persistLock.isChecked();
         try {RadioModeSelection.target(nrRequested,probe.optInt("rat_mode_preference",-1),backup.optInt("original_radio_mode",-1));}
         catch(IllegalArgumentException e) {status.setText(e.getMessage());return;}
-        new AlertDialog.Builder(this).setTitle("Apply SA bands until reboot?").setMessage(bandNames(target)+"\n\n"+(nrRequested?"NR only: on. LTE fallback is disabled.":"NR only: off. Restore the captured earlier mode if currently NR only; otherwise keep the current mode.")+"\n\nApply bands and radio mode together, then verify both. NSA and LTE band preferences are preserved.").setNegativeButton("Cancel",null).setPositiveButton("Apply",(d,w) -> mutate(false,target,nrRequested)).show();
+        new AlertDialog.Builder(this).setTitle(persistRequested?"Apply SA bands and reapply after reboot?":"Apply SA bands until reboot?").setMessage(bandNames(target)+"\n\n"+(nrRequested?"NR only: on. LTE fallback is disabled.":"NR only: off. Restore the captured earlier mode if currently NR only; otherwise keep the current mode.")+"\n\n"+(persistRequested?"After verification, save this selection for automatic reapply after boot and first unlock.":"Reboot reapply will be disabled for this SIM slot.")+"\n\nApply bands and radio mode together, then verify both. NSA and LTE band preferences are preserved.").setNegativeButton("Cancel",null).setPositiveButton("Apply",(d,w) -> mutate(false,target,nrRequested,persistRequested)).show();
     }
     private void confirmRestore() {
-        new AlertDialog.Builder(this).setTitle("Restore captured SA bytes?").setMessage("Restores the exact SA preference captured by this app. The current radio mode and NSA preference are preserved. Any pending NR-only checkbox change is not applied by this Restore button.").setNegativeButton("Cancel",null).setPositiveButton("Restore",(d,w) -> mutate(true,backup.optString("original_sa"),false)).show();
+        new AlertDialog.Builder(this).setTitle("Restore captured SA bytes?").setMessage("Restores the exact SA preference captured by this app. Reboot reapply is disabled for this SIM slot. The current radio mode and NSA preference are preserved. Any pending NR-only checkbox change is not applied by this Restore button.").setNegativeButton("Cancel",null).setPositiveButton("Restore",(d,w) -> mutate(true,backup.optString("original_sa"),false,false)).show();
     }
-    private void mutate(boolean restoring,String target,boolean nrRequested) {
-        final int s=slot;final JSONObject b=backup;
+    private void mutate(boolean restoring,String target,boolean nrRequested,boolean persistRequested) {
+        final int s=slot;
         work(restoring?"Restoring and verifying SA…":"Applying and verifying SA…",() -> {
+            // Cancel old intent first. A failed/uncertain replacement cannot silently rearm it.
+            BootPlans.clear(this,s);
+            ui(() -> {activeBootPlan=null;persistLock.setChecked(false);showBootStatus();});
+            JSONObject b=loadBackup(s);
+            if(b==null)throw new IOException("Read preferences to capture a backup first. No SET was sent.");
             JSONObject fresh=invoke("qmi-probe",""+s);
             if(!fresh.optBoolean("ok"))throw new IOException(fresh.optString("error"));
-            String expected=restoring?fresh.getString("sa_hex"):b.getString("expected_sa");
-            int expectedMode=fresh.optInt("rat_mode_preference",-1),targetMode=-1;
-            if(!restoring) {
-                targetMode=RadioModeSelection.target(nrRequested,expectedMode,b.optInt("original_radio_mode",-1));
-                if(nrRequested&&(!b.has("original_radio_mode")||(!b.optBoolean("radio_mode_dirty")&&b.optInt("pending_radio_mode",-1)<0&&expectedMode!=64)))b.put("original_radio_mode",expectedMode);
-                b.put("expected_radio_mode",expectedMode);b.put("pending_radio_mode",targetMode);
-                if(b.has("original_radio_mode"))b.put("radio_mode_dirty",true);
-            }
-            b.put("pending_sa",target);saveBackup(s,b);
-            JSONObject r=restoring?invoke("qmi-restore",""+s,b.getString("original_sa"),expected,b.getString("original_nsa")):invoke("qmi-apply-plan",""+s,b.getString("original_sa"),expected,b.getString("original_nsa"),target,""+expectedMode,""+targetMode);
+            if(!matchesDevice(b))throw new IOException("Backup does not match this device. No SET was sent.");
+            PreferenceJournal journal=journal(b);
+            journal.refresh(snapshot(fresh));
+            String expected=journal.expectedSa;
+            if(!restoring&&(fresh.optInt("rat_mode_preference",-1)<1||fresh.optInt("rat_mode_preference",-1)>127))throw new IOException("Live radio mode is unavailable. No SET was sent. Read preferences again.");
+            int expectedMode=journal.expectedMode,targetMode=journal.stage(target,restoring,nrRequested);
+            storeJournal(b,journal);saveBackup(s,b);
+            JSONObject r=restoring?invoke("qmi-restore",""+s,journal.originalSa,expected,journal.originalNsa):invoke("qmi-apply-plan",""+s,journal.originalSa,expected,journal.originalNsa,target,""+expectedMode,""+targetMode);
             recordChange(s,restoring?"sa_restore":"sa_and_radio_mode_apply",r);
-            if(r.optBoolean("ok")) {b.put("expected_sa",target);b.put("pending_sa","");saveBackup(s,b);}
-            else if(r.optBoolean("rollback_verified")) {b.put("expected_sa",expected);b.put("pending_sa","");saveBackup(s,b);}
-            if(!restoring&&(r.optBoolean("ok")||r.optBoolean("rollback_verified"))) {
-                int actual=r.optInt("rat_mode_preference",-1);b.put("expected_radio_mode",actual);b.put("pending_radio_mode",-1);
-                if(b.has("original_radio_mode"))b.put("radio_mode_dirty",actual!=b.getInt("original_radio_mode"));saveBackup(s,b);
+            PreferenceJournal.Snapshot observed=null;
+            if(r.has("sa_hex")&&r.has("nsa_hex")) {
+                try {observed=snapshot(r);}catch(IllegalArgumentException ignored) {}
             }
+            // Missing write_attempted is uncertain, never evidence that no write happened.
+            journal.finish(r.optBoolean("ok"),r.optBoolean("rollback_verified"),r.optBoolean("write_attempted",true),observed);
+            storeJournal(b,journal);saveBackup(s,b);
+            if(!restoring&&persistRequested&&r.optBoolean("ok"))BootPlans.save(this,s,b,target,targetMode,r);
+            JSONObject plan=BootPlans.load(this,s);
             ui(() -> {
+                backup=b;activeBootPlan=plan;persistLock.setChecked(plan!=null);showBootStatus();
                 if(r.has("sa_hex"))probe=r;else probe=null;
                 showPreferences();
-                status.setText(r.optBoolean("ok")?(restoring?"Captured SA bytes restored; readback verified.":"SA bands and radio-mode readback verified. Check serving state separately."):r.optString("error"));
+                status.setText(r.optBoolean("ok")?(restoring?"Captured SA bytes restored; readback verified.":"SA bands and radio-mode readback verified. "+(plan!=null?"Reboot reapply saved. ":"Reboot reapply is off. ")+"Check serving state separately."):r.optString("error"));
             });
         });
     }
-    private String baseband() {return Build.getRadioVersion()==null?"unknown":Build.getRadioVersion();}
+    private void showBootStatus() {
+        String text=activeBootPlan==null?"Saved reboot reapply: off.":"Saved reboot reapply: "+bandNames(activeBootPlan.optString("target_sa"))+" · RAT mask "+activeBootPlan.optInt("target_radio_mode",-1)+". Applies to this SIM slot.";
+        if(lastBootResult!=null) {
+            JSONObject result=lastBootResult.optJSONObject("helper_result");
+            text+="\nLast boot attempt: "+(result!=null&&result.optBoolean("ok")?"verified.":result==null?"unknown.":result.optString("error","Failed; copy diagnostic report."));
+        }
+        bootStatus.setText(text);
+    }
+    private static PreferenceJournal.Snapshot snapshot(JSONObject r) {return PreferenceStore.snapshot(r);}
+    private static PreferenceJournal journal(JSONObject b) {return PreferenceStore.journal(b);}
+    private static void storeJournal(JSONObject b,PreferenceJournal journal) throws Exception {PreferenceStore.storeJournal(b,journal);}
+    private String baseband() {return PreferenceStore.baseband();}
     private String deviceBinding() {return android.provider.Settings.Secure.getString(getContentResolver(),android.provider.Settings.Secure.ANDROID_ID);}
-    private boolean matchesDevice(JSONObject b) {return b.optInt("schema")==2&&"qmi-nas-sa-v1".equals(b.optString("read_profile"))&&Build.FINGERPRINT.equals(b.optString("fingerprint"))&&baseband().equals(b.optString("baseband"))&&deviceBinding().equals(b.optString("device_binding"));}
+    private boolean matchesDevice(JSONObject b) {return PreferenceStore.matchesDevice(this,b);}
     private void copyReport() {
         ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("SA Band Lab report",report()));
         Toast.makeText(this,"Report copied",Toast.LENGTH_SHORT).show();
     }
     private String report() {
-        JSONObject r=new JSONObject();try {r.put("app","SA Band Lab 0.8");r.put("model",Build.MODEL);r.put("android",Build.VERSION.RELEASE);r.put("fingerprint",Build.FINGERPRINT);r.put("baseband",baseband());r.put("slot",slot);r.put("helper_result",lastHelperResult==null?lastReport:lastHelperResult);if(lastChange!=null)r.put("last_preference_change",lastChange);if(lastEfsResult!=null)r.put("efs_diagnostic",lastEfsResult);r.put("serving_state",radio.getText());if(lastBandObservation!=null)r.put("five_g_observation",lastBandObservation);if(lastModemFrequencies!=null)r.put("modem_frequencies",lastModemFrequencies);if(backup!=null)r.put("backup",backup);return r.toString(2);}catch(Exception e) {return lastReport;}
+        JSONObject r=new JSONObject();try {r.put("app","SA Band Lab 0.9");r.put("model",Build.MODEL);r.put("android",Build.VERSION.RELEASE);r.put("fingerprint",Build.FINGERPRINT);r.put("baseband",baseband());r.put("slot",slot);r.put("helper_result",lastHelperResult==null?lastReport:lastHelperResult);if(lastChange!=null)r.put("last_preference_change",lastChange);r.put("reapply_after_reboot_enabled",activeBootPlan!=null);if(activeBootPlan!=null)r.put("boot_reapply_plan",activeBootPlan);if(lastBootResult!=null)r.put("last_boot_reapply",lastBootResult);if(lastEfsResult!=null)r.put("efs_diagnostic",lastEfsResult);r.put("serving_state",radio.getText());if(lastBandObservation!=null)r.put("five_g_observation",lastBandObservation);if(lastModemFrequencies!=null)r.put("modem_frequencies",lastModemFrequencies);if(backup!=null)r.put("backup",backup);return r.toString(2);}catch(Exception e) {return lastReport;}
     }
     private void exportBackups() {
         Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"sa-band-lab-backup.json");startActivityForResult(i,100);

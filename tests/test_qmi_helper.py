@@ -172,6 +172,28 @@ class QmiTests(unittest.TestCase):
         m=self.modem();r=m.call('qmi-apply-plan',0,m.original[0].hex(),m.original[0].hex(),m.nsa[0].hex(),mask(78).hex(),92,92)
         self.assertEqual(r['state'],'applied_verified',r);self.assertEqual(m.modes[0],92);self.assertEqual(len(m.combined_sets),1)
 
+    def test_combined_reapply_after_reboot_uses_fresh_baseline(self):
+        m=self.modem();original=m.original[0].hex();nsa=m.nsa[0].hex();target=mask(78).hex()
+        r=m.call('qmi-apply-plan',0,original,original,nsa,target,92,64)
+        self.assertTrue(r['ok'],r)
+        # Modem restores temporary preferences after power cycle; private app journal survives.
+        m.sa[0]=m.original[0];m.modes[0]=28
+        fresh=m.call('qmi-probe',0)
+        self.assertEqual(fresh['sa_hex'],original);self.assertEqual(fresh['rat_mode_preference'],28)
+        r=m.call('qmi-apply-plan',0,original,fresh['sa_hex'],nsa,target,fresh['rat_mode_preference'],64)
+        self.assertEqual(r['state'],'applied_verified',r);self.assertEqual(m.sa[0],mask(78));self.assertEqual(m.modes[0],64)
+        self.assertEqual(len(m.combined_sets),2);self.assertEqual(m.nsa[0].hex(),nsa);self.assertEqual(m.lte,b'\xff'*8)
+
+    def test_combined_change_after_preflight_still_never_sets(self):
+        for change in ['sa','nsa','mode']:
+            m=self.modem();original=m.original[0].hex();nsa=m.nsa[0].hex();fresh=m.call('qmi-probe',0)
+            if change=='sa':m.sa[0]=mask(3)
+            elif change=='nsa':m.nsa[0]=mask(3)
+            else:m.modes[0]=28
+            r=m.call('qmi-apply-plan',0,original,fresh['sa_hex'],nsa,mask(78).hex(),fresh['rat_mode_preference'],64)
+            self.assertIn(r['state'],['stale_snapshot','stale_mode'],r);self.assertFalse(r['write_attempted'])
+            self.assertEqual(m.combined_sets,[]);self.assertEqual(m.sets,[]);self.assertEqual(m.mode_sets,[])
+
     def test_combined_mode_change_runs_even_when_bands_already_match(self):
         m=self.modem();m.sa[0]=mask(78);original=m.original[0].hex();nsa=m.nsa[0].hex()
         r=m.call('qmi-apply-plan',0,original,mask(78).hex(),nsa,mask(78).hex(),92,64)

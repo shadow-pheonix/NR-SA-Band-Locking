@@ -33,6 +33,42 @@ original NSA value, pending targets and optional radio-mode restoration fields.
 They are atomically written before mutation and bound to device/firmware/baseband
 and Android ID. No captured phone backups are included in this repository.
 
+A successful live read refreshes the expected SA and mode and resolves pending
+intent; it never replaces the captured original SA/NSA or earlier radio mode.
+Apply always uses its fresh preflight SA/mode, including after a reboot has
+returned the modem to its broad original mask. The helper independently compares
+that preflight state immediately before SET, so a concurrent change still
+refuses the write. A response explicitly reporting no write cancels the staged
+intent; an uncertain write retains it until a successful live read resolves it.
+
+## Optional boot reapply (upcoming 0.9)
+
+**Reapply after reboot** is off by default and saved only after verified Apply.
+Private per-slot plan files are separate from backups; importing a backup does
+not arm a plan. Replacing a lock cancels its old plan first, and failed Apply
+cannot arm a replacement. Restore and the explicit disable control cancel the
+plan. Plans bind to the original backup and its device/firmware identity.
+
+An unexported BOOT_COMPLETED receiver schedules a JobService after normal boot
+and first unlock. Plans use credential-protected app storage; nothing runs at
+locked boot. The first job requests a delay of at least 30 seconds, with up to
+two further preflight-only retries at 60 and 120 seconds. Execution timing is
+controlled by Android. The JobService uses the same bounded root helper and
+combined NAS SET as manual Apply, refreshing its expected snapshot first.
+
+Foreground actions and boot transactions share a process-wide lock. Retry job
+extras include only slots whose preflight failed; a failed or uncertain mutation
+is never retried because another slot was not ready. Cancellation is checked
+before SET; an already-running helper completes its bounded verification and
+rollback rather than being interrupted. This is not continuous enforcement and
+does not reapply again if the OS changes preferences later in the same boot.
+Boot attempts are retained in a separate report, with actual mutation responses
+also retained as the last preference change. No Android boot/root execution has
+yet been verified on the user's phone for this feature.
+
+Android lifecycle references: [JobService](https://developer.android.com/reference/android/app/job/JobService)
+and [JobScheduler](https://developer.android.com/reference/android/app/job/JobScheduler).
+
 The most recent preference-change response is retained independently of later
 reads. EFS diagnostic results and modem frequency results use separate report
 fields, so a failed optional read does not replace an earlier apply trace.
