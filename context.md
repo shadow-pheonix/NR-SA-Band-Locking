@@ -29,13 +29,23 @@ history. Never publish credentials or private device identifiers here.
   post-reboot fresh-baseline fix. The newer 0.11 report is a speed test only.
 - **Automatic reboot reapply has not been phone-tested.** The latest report has
   `reapply_after_reboot_enabled: false`; it contains no boot reapply evidence.
-- Latest 0.12 device report fails in **Latency** after roughly 6s, with no
-  download/upload attempted and zero transferred payload. Fresh registered n78
-  observations and Android NR RAT are present before and after the attempt.
-  A separate Refresh network snapshot also succeeds. No root operation ran.
-- Earlier 0.11 report remains the only speed evidence: about 266 Mbps download,
-  HTTP latency about 79 ms, upload timeout. Neither report demonstrates a full
-  successful speed test, nor a modem preference change in those sessions.
+- Latest **0.13 phone evidence**: modem read succeeds with n78-only SA and
+  NR-only (mode 64); NSA matches the original backup. The last mutation record
+  is still historical helper 0.9. No tile profile/operation is in this report,
+  so it does not validate the tile. Reboot reapply remains off.
+- 0.13 speed test: 3/3 HTTP latency samples, median about 76.9 ms; download
+  receives about 793.6 MB but HTTP 429 ends that phase at 18.33s and the engine
+  drops its rate (`download: null`). Upload proceeds and finishes 20s at
+  2.325 Mbps with 5.8125 MB acknowledged. Fresh registered n78 samples are
+  recorded at all four boundaries. This confirms upload progress after a download
+  error; it does not demonstrate a fully complete speed test. No new mutation.
+- Current fix: retain validated transferred/acknowledged bytes and actual elapsed
+  time as a clearly interrupted partial rate after ordinary endpoint failure;
+  keep missing rates when no valid bytes were measured. Do not count 429 error
+  bodies or unacknowledged upload bytes, fabricate a full 20s sample, retry around
+  rate limits, or weaken fatal Stop/SIM/network handling. Add regression tests
+  and clear per-direction UI/history labels. User explicitly authorized building
+  the APK after this fix; prepare 0.14, verify and publish without asking again.
 - Shipped in 0.13: 0.12's 3s latency socket timeout/6s fail-fast gate is
   replaced by an independent latency phase (5s socket, 8s total budget), followed
   by download and upload even when a measurement fails. Stop/route changes remain
@@ -53,6 +63,65 @@ history. Never publish credentials or private device identifiers here.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
+
+## Current fix: retain interrupted speed measurements (2026-10-29)
+
+User reports 0.13 showing partial results and no download despite transfers.
+Diagnosis from source: transfer catches any ordinary worker exception, records
+it and returns null even if other successful HTTP 200 requests have already
+accumulated valid measurement bytes. The report's failure elapsed time is 18.33s,
+not a completed 20s download. Preserve a partial rate using a frozen byte/time
+snapshot before cleanup, expose completion/interruption per direction in JSON,
+main tiles and saved history. HTTP 429 is server rate limiting; no retry loops
+or host/IP/route changes to work around it. No modem/tile changes requested.
+The user explicitly asked to build the APK after fixing; no further approval
+needed for 0.14 build/release.
+
+Implemented: Measurement freezes valid bytes and actual phase window together
+before asynchronous cleanup. Endpoint failures retain a Rate only if validated
+bytes exist, with partial/completion_reason metadata; zero-byte failures remain
+null. Upload counts only HTTP 200 acknowledged payloads. `throughputComplete()`
+rejects interrupted directions. Rate JSON serialization
+is shared/tested. Main/compact history keep the number with an asterisk;
+status identifies the interrupted direction, caption and full reports show actual
+seconds vs requested duration. A 429 ends remaining ping probes and affected
+transfer without retry; other phases remain independent. Stop/route aborts remain
+fatal. Old null download history is not reconstructed from raw traffic.
+
+Nine core/report/localhost-HTTP checks and Android compilation pass at the source
+checkpoint. Regression includes valid download then 429, immediate no-byte 429,
+partial upload acknowledgements, parallel windows, full report serialization,
+legacy history, truncated/invalid replies and existing Stop/SIM guards. A real
+localhost HTTP test transfers 25 MB then returns 429, verifies retained bytes/time
+and continued upload with no download retry. No phone validation of the fix yet.
+Authorized version 0.14 / code 14 is built and verified; publication is in
+progress. Old public APKs remain unchanged.
+
+## Approved 0.14 build checkpoint (2026-10-29)
+
+User explicitly requested the APK build after fixing lost interrupted speeds.
+
+- APK `sa-band-lab-0.14-arm64.apk`: **157,237 bytes**.
+- APK SHA-256: `e8e59da7a63cd0c54f9e371b540d313c8a086e830d5d398fa70f723e4cde1c23`.
+- Helper: **76,712 bytes**; SHA-256
+  `b7325c5890fba1df682a23c38e1f06b54945e1c87bc601b9bd7dfb98fa1f0dee`.
+- v3 signing verified with unchanged official certificate SHA-256
+  `c9d0695602ec1ede8245f7bcb39d3cf89ec9721927879b36b23d94c78d766fc7`.
+- Manifest package unchanged; code 14/name 0.14-sa-test; min 30/target 34;
+  ARM64, existing permissions, protected tile/boot services, themed launcher
+  and 5G tile icon verified. New Measurement/HttpStatusException/result strings
+  verified in the exact DEX, preserving tile/controller classes.
+- ZIP and alignment pass; exact current README, licenses/notices and ARM64 helper
+  are bundled. Four ELF LOAD segments use 16 KiB alignment. No mock mode or
+  signing keys packaged. Previous locally available 0.13/0.12/0.11/0.10 APK hashes
+  unchanged. No modem protocol behavior changed, helper label only.
+- Nine Java/report/real localhost HTTP checks pass; transport boundary check and
+  52 native modem mock cases pass. The local socket regression confirms retained
+  25 MB download measurement after subsequent HTTP 429 and independent upload.
+- New behavior still needs phone validation. 0.13 remains the latest phone
+  evidence; its old missing download rate cannot be precisely reconstructed.
+- Publication pending at this checkpoint. Install over the existing official app
+  to preserve backups, history and tile profile.
 
 ## Current feature work: 5G Quick Settings tile (2026-10-29)
 
@@ -1032,13 +1101,16 @@ on reads mode 64 plus the chosen SA mask, and the other SIM/NSA/LTE masks remain
 unchanged. Test lock-screen unlock, rapid taps, busy/speed-test refusal,
 long press, root denial, reboot behavior and HyperOS display. Preference state
 is separate from actual LTE/NR registration; refresh network after settling.
-No tile/0.13 phone evidence has been received yet.
+A 0.13 phone report confirms live n78/NR-only preferences and fresh serving
+observations, but has no tile operation/profile. Tile phone validation is pending.
 
 For speed-test validation, establish that a
 failed/missing ping still reaches Before download/Before upload, and inspect
 phase_failures/operations if a throughput phase also fails. Do not describe host
-HTTP success as proof of Jio/Cloudflare/Android TLS behavior. The latest phone
-evidence is the 0.12 latency-only failure; no full phone speed test has succeeded.
+HTTP success as proof of Jio/Cloudflare/Android TLS behavior. The latest 0.13 phone evidence confirms 3/3 ping samples and full 20s upload
+after a download HTTP 429 at 18.33s, with download rate discarded despite valid
+received bytes. Fix that preservation/UI behavior and publish the authorized
+0.14 build. No full error-free phone speed test has succeeded.
 
 Also test native rendering/navigation, launcher appearance, font scale and
 existing manual Apply/restore on the phone. Host checks cannot establish these

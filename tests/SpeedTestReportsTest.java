@@ -14,6 +14,12 @@ public final class SpeedTestReportsTest {
         return r;
     }
     public static void main(String[] args) throws Exception {
+        JSONObject measured=(JSONObject)SpeedTestStore.rateReport(new SpeedTestEngine.Rate(25000000,18330000000L,false,true,"http_429"));
+        JSONObject stored=new JSONObject(measured.toString());
+        check(stored.getBoolean("partial")&&!stored.getBoolean("complete")&&stored.getString("completion_reason").equals("http_429"));
+        check(stored.getLong("payload_bytes")==25000000&&stored.getDouble("elapsed_ms")==18330&&stored.getDouble("mbps")>0);
+        check(((JSONObject)SpeedTestStore.rateReport(new SpeedTestEngine.Rate(25000000,20000000000L,false))).getBoolean("complete"));
+        check(SpeedTestStore.rateReport(null)==JSONObject.NULL);
         JSONObject first=report(0,"n78","n28");JSONArray history=new JSONArray();history=SpeedTestStore.prepend(history,first);
         String shown=SpeedTestStore.render(new JSONArray(history.toString()),0);
         check(shown.contains("Serving bands (sampled): n78")&&!shown.contains("n28"));
@@ -40,6 +46,18 @@ public final class SpeedTestReportsTest {
         check(SpeedTestStore.outcome(noPing).equals("Speeds measured · ping unavailable"));
         shown=SpeedTestStore.render(new JSONArray().put(noPing),0);check(shown.contains("450.3 Mbps")&&shown.contains("41.2 Mbps")&&shown.contains("Ping (HTTP): —")&&shown.contains("HTTP ping samples: 0 / 1"));
         noPing.put("aborted",true);check(!SpeedTestStore.outcome(noPing).startsWith("Speeds measured"));
-        System.out.println("Speed history checks passed: serving versus selected bands, roundtrip, download/upload/ping, samples, missing values, SIM filtering, short runs and latest-20 retention.");
+        JSONObject limited=report(0,"n78","n78");limited.put("complete",false);limited.put("throughput_complete",false);limited.put("duration_per_direction_s",20);
+        limited.getJSONObject("download").put("partial",true).put("complete",false).put("completion_reason","http_429").put("elapsed_ms",18330).put("short_sample",false);
+        limited.getJSONObject("upload").put("partial",false).put("complete",true).put("elapsed_ms",20000);
+        limited.put("error","Download failed: Test server rate limit (HTTP 429). Wait before retrying.");
+        check(SpeedTestStore.outcome(limited).equals("Download interrupted · speeds saved"));
+        shown=SpeedTestStore.render(new JSONArray("["+limited.toString()+"]"),0);
+        check(shown.contains("450.3 Mbps (interrupted)")&&shown.contains("41.2 Mbps")&&shown.contains("18.3s / 20s requested")&&shown.contains("20.0s / 20s requested"));
+        check(SpeedTestStore.measurementNote(limited).contains("18.3s")&&SpeedTestStore.measurementNote(limited).contains("server rate limit (HTTP 429)"));
+        limited.getJSONObject("upload").put("partial",true);check(SpeedTestStore.outcome(limited).equals("Transfers interrupted · speeds saved"));
+        limited.getJSONObject("download").put("partial",false);check(SpeedTestStore.outcome(limited).equals("Upload interrupted · speeds saved"));
+        limited.put("cancelled",true);check(SpeedTestStore.outcome(limited).equals("Stopped"));
+        check(SpeedTestStore.measurementNote(first).isEmpty()); // Older history has no partial metadata.
+        System.out.println("Speed history checks passed: real rate serialization, interrupted speeds and measured/requested times, legacy reports, serving samples, missing values, SIM filtering and latest-20 retention.");
     }
 }

@@ -34,9 +34,25 @@ public final class SpeedTestEngine {
         }
     }
     public static final class Rate {
-        public final long bytes,nanos;public final boolean capped;
-        Rate(long bytes,long nanos,boolean capped) {this.bytes=bytes;this.nanos=nanos;this.capped=capped;}
+        public final long bytes,nanos;public final boolean capped,partial;
+        public final String completionReason;
+        Rate(long bytes,long nanos,boolean capped) {this(bytes,nanos,capped,false,capped?"payload_cap":"duration_elapsed");}
+        Rate(long bytes,long nanos,boolean capped,boolean partial,String reason) {
+            this.bytes=bytes;this.nanos=nanos;this.capped=capped;this.partial=partial;completionReason=reason;
+        }
         public double mbps() {return nanos<=0?0:bytes*8000.0/nanos;}
+    }
+    /** Freeze valid payload and its measurement window together, before socket cleanup. */
+    private static final class Measurement {
+        final long start,deadline;private long bytes,endedAt;private boolean ended;
+        Measurement(long start,long deadline) {this.start=start;this.deadline=deadline;}
+        synchronized void add(long count) {if(!ended&&System.nanoTime()<deadline)bytes+=count;}
+        synchronized long bytes() {return bytes;}
+        synchronized Rate finish(long end,long budget,boolean partial,String reason) {
+            if(!ended) {ended=true;endedAt=Math.max(start+1,Math.min(end,deadline));}
+            return new Rate(bytes,endedAt-start,bytes>=budget,partial,reason);
+        }
+        synchronized void stop() {ended=true;}
     }
     public static final class Result {
         public double latencyMs=-1;public Rate download,upload;
@@ -44,11 +60,15 @@ public final class SpeedTestEngine {
         public String error="",failedPhase="",errorType="";public boolean cancelled,aborted;
         public int latencyAttempts,latencyValidSamples;
         public final List<Failure> failures=new ArrayList<>();
-        public boolean complete() {return !cancelled&&!aborted&&error.isEmpty()&&latencyMs>=0&&download!=null&&upload!=null;}
-        public boolean throughputComplete() {return !cancelled&&!aborted&&download!=null&&upload!=null;}
+        public boolean complete() {return error.isEmpty()&&latencyMs>=0&&throughputComplete();}
+        public boolean throughputComplete() {return !cancelled&&!aborted&&download!=null&&upload!=null&&!download.partial&&!upload.partial;}
     }
     /** A changed/disallowed route is fatal; endpoint measurement failures are not. */
     public static final class AbortException extends IOException {public AbortException(String message) {super(message);}}
+    private static final class HttpStatusException extends IOException {
+        final int status;
+        HttpStatusException(int status) {super(status==429?"Test server rate limit (HTTP 429). Wait before retrying.":"Speed endpoint returned HTTP "+status+".");this.status=status;}
+    }
     public static final class RequestInfo {
         public final String method,endpoint,operation,errorType;public final int httpStatus;public final long elapsedMs,payloadBytes;
         RequestInfo(Request r) {
@@ -148,7 +168,7 @@ public final class SpeedTestEngine {
     private static void status(Request request) throws IOException {
         if(request.scope.stopped.get())throw new InterruptedIOException("Phase ended.");
         HttpURLConnection c=request.connection;request.operation="response_headers_including_connect_tls";request.httpStatus=c.getResponseCode();
-        if(request.httpStatus!=200)throw new IOException("Speed endpoint returned HTTP "+request.httpStatus+".");
+        if(request.httpStatus!=200)throw new HttpStatusException(request.httpStatus);
         String encoding=c.getContentEncoding();if(encoding!=null&&!encoding.equalsIgnoreCase("identity"))throw new IOException("Unexpected compressed test response.");
     }
     private double latency(Scope scope) throws IOException {
@@ -170,7 +190,7 @@ public final class SpeedTestEngine {
                         try {samples[valid]=future.get(Math.min(100,Math.max(1,TimeUnit.NANOSECONDS.toMillis(remaining))),TimeUnit.MILLISECONDS);valid++;break;}
                         catch(TimeoutException e) {if(System.nanoTime()>=deadline)throw e;}
                     }
-                } catch(Exception e) {canContinue(e);failure=root(e);if(!future.isDone())break;}
+                } catch(Exception e) {canContinue(e);failure=root(e);if(!future.isDone()||failure instanceof HttpStatusException&&((HttpStatusException)failure).status==429)break;}
                 finally {if(!future.isDone())future.cancel(true);}
             }
             if(valid>0) {Arrays.sort(samples,0,valid);result.latencyMs=valid%2==0?(samples[valid/2-1]+samples[valid/2])/2:samples[valid/2];listener.latency(result.latencyMs);}
@@ -181,7 +201,7 @@ public final class SpeedTestEngine {
     private Rate transfer(boolean upload,long budget,Result result) throws Exception {
         Scope scope=new Scope(config.streams);
         long start=System.nanoTime(),deadline=start+TimeUnit.MILLISECONDS.toNanos(config.phaseMillis);
-        AtomicBoolean stop=scope.stopped;AtomicLong completed=new AtomicLong(),lastFinished=new AtomicLong(start);List<Future<?>> tasks=new ArrayList<>();
+        AtomicBoolean stop=scope.stopped;Measurement completed=new Measurement(start,deadline);AtomicLong lastFinished=new AtomicLong(start);List<Future<?>> tasks=new ArrayList<>();
         for(int i=0;i<config.streams;i++) {
             final long quota=budget/config.streams+(i<budget%config.streams?1:0);
             tasks.add(scope.pool.submit(() -> {
@@ -189,27 +209,35 @@ public final class SpeedTestEngine {
                 finally {lastFinished.accumulateAndGet(System.nanoTime(),Math::max);}
             }));
         }
-        long finished=0,measuredBytes=0;
         try {
             while(true) {
                 check();boolean done=true;
                 for(Future<?> f:tasks) {if(f.isDone())f.get();else done=false;}
-                long now=System.nanoTime();listener.progress(upload?"Upload":"Download",completed.get(),now-start);
-                if(done||now>=deadline) {finished=done?Math.min(lastFinished.get(),deadline):deadline;measuredBytes=completed.get();break;}
+                long now=System.nanoTime();listener.progress(upload?"Upload":"Download",completed.bytes(),now-start);
+                if(done||now>=deadline) {
+                    Rate rate=completed.finish(done?lastFinished.get():deadline,budget,false,completed.bytes()>=budget?"payload_cap":"duration_elapsed");
+                    check();if(rate.bytes<=0)throw new IOException(upload?"No upload payload was acknowledged.":"No download data was received.");
+                    return rate;
+                }
                 Thread.sleep(100);
             }
-            check();if(measuredBytes<=0)throw new IOException(upload?"No upload payload was acknowledged.":"No download data was received.");
         } catch(Exception e) {
-            canContinue(e);record(result,upload?"Upload":"Download",root(e),scope);return null;
+            canContinue(e);Throwable cause=root(e);
+            String reason=cause instanceof HttpStatusException?"http_"+((HttpStatusException)cause).status:"endpoint_error";
+            Rate partial=completed.finish(System.nanoTime(),budget,true,reason);
+            record(result,upload?"Upload":"Download",cause,scope);
+            // Only validated HTTP 200 data/acknowledged uploads enter this counter.
+            // A later error does not erase them or make the requested window complete.
+            return partial.bytes>0?partial:null;
         } finally {
+            completed.stop();
             scope.close();
             for(Future<?> f:tasks)if(!f.isDone())f.cancel(true);
         }
-        return new Rate(measuredBytes,Math.max(1,finished-start),measuredBytes>=budget);
     }
     private boolean running(long deadline,AtomicBoolean stop) throws IOException {check();return !stop.get()&&System.nanoTime()<deadline;}
     private int responseTimeout() {return (int)Math.min(RESPONSE_TIMEOUT_MS,config.phaseMillis);}
-    private void download(Scope scope,long quota,long deadline,AtomicBoolean stop,AtomicLong completed) throws IOException {
+    private void download(Scope scope,long quota,long deadline,AtomicBoolean stop,Measurement completed) throws IOException {
         byte[] buffer=new byte[65536];long count=0;
         while(count<quota&&running(deadline,stop)) {
             long request=Math.min(DOWNLOAD_REQUEST_BYTES,quota-count);
@@ -222,7 +250,7 @@ public final class SpeedTestEngine {
                     while(part<request&&running(deadline,stop)) {
                         int n=in.read(buffer,0,(int)Math.min(buffer.length,request-part));
                         if(n<0)throw new IOException("Truncated speed-test download.");
-                        part+=n;count+=n;received.addAndGet(n);if(running(deadline,stop))completed.addAndGet(n);
+                        part+=n;count+=n;received.addAndGet(n);if(running(deadline,stop))completed.add(n);
                     }
                 }
                 trace.operation="complete";
@@ -230,7 +258,7 @@ public final class SpeedTestEngine {
             finally {release(trace);}
         }
     }
-    private void upload(Scope scope,long quota,long deadline,AtomicBoolean stop,AtomicLong completed) throws IOException {
+    private void upload(Scope scope,long quota,long deadline,AtomicBoolean stop,Measurement completed) throws IOException {
         byte[] buffer=new byte[32768];new Random().nextBytes(buffer);long count=0;int nextChunk=UPLOAD_CHUNK_BYTES;
         while(count<quota&&running(deadline,stop)) {
             int chunk=(int)Math.min(nextChunk,quota-count);Request trace=open(scope,"/__up",responseTimeout(),chunk,true);HttpURLConnection c=trace.connection;long requestStart=System.nanoTime();
@@ -239,7 +267,7 @@ public final class SpeedTestEngine {
                 trace.operation="opening_upload_stream";try(OutputStream out=c.getOutputStream()) {trace.operation="sending_upload";int n=0;while(n<chunk) {if(!running(deadline,stop))return;int take=Math.min(buffer.length,chunk-n);out.write(buffer,0,take);sent.addAndGet(take);n+=take;}}
                 status(trace);trace.operation="reading_response_body";
                 try(InputStream in=c.getInputStream()) {int total=0,n;while((n=in.read(buffer,0,Math.min(buffer.length,4097-total)))!=-1) {total+=n;if(total>4096)throw new IOException("Unexpected upload response size.");}}
-                acknowledged.addAndGet(chunk);if(running(deadline,stop))completed.addAndGet(chunk);count+=chunk;
+                acknowledged.addAndGet(chunk);if(running(deadline,stop))completed.add(chunk);count+=chunk;
                 trace.operation="complete";
                 long elapsed=System.nanoTime()-requestStart;
                 if(elapsed<500000000L)nextChunk=Math.min(MAX_UPLOAD_CHUNK_BYTES,nextChunk*2);

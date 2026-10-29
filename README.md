@@ -17,13 +17,35 @@ meaningful checkpoint.
 
 ## Download the APK
 
-**[Download SA Band Lab 0.13 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.13.0/sa-band-lab-0.13-arm64.apk)**
+**[Download SA Band Lab 0.14 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.14.0/sa-band-lab-0.14-arm64.apk)**
 
-[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.13.0)
+[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.14.0)
 · [All releases](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases)
 
 Download the `.apk` file to install the app. GitHub's **Source code (zip)** is for
 developers and cannot be installed as an Android app.
+
+### Version 0.14: keep speeds measured before an interruption
+
+A 0.13 phone test received about 793.6 MB before HTTP 429 stopped download at
+18.33 seconds. Upload still completed 20 seconds at 2.325 Mbps, with three valid
+ping samples and fresh n78 observations. The app incorrectly discarded all of
+that download's measured speed when a later request failed.
+
+Version **0.14** retains the valid download (or acknowledged upload) bytes and
+actual measurement time as an **interrupted result**. The numeric speed stays
+visible with an asterisk, and the status explains which direction was interrupted.
+History includes measured time versus the requested 20/60 seconds and preserves
+serving bands, both available speeds and ping. A short or interrupted run is
+not labeled a completed full-duration test. HTTP 429 stops that direction without
+automatic retries; a zero-byte failure still has no speed value. Stop and route
+changes keep their existing behavior. Earlier saved null rates are not rebuilt
+from total traffic counters because those lack the exact validated sample.
+
+Host tests include real localhost HTTP 200 data followed by 429, upload after the
+error, partial upload acknowledgement, report serialization and old history.
+The fix still needs a new phone test. Install over the existing official APK to
+keep backups, tile settings and history.
 
 Version **0.10** includes a new launcher icon and a redesigned **Overview / Bands /
 Tools** interface, a persistent SIM selector, retained draft selections and grouped

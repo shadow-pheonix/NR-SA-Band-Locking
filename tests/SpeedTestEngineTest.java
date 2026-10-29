@@ -14,9 +14,10 @@ public final class SpeedTestEngineTest {
     };
     private static final class Endpoint implements SpeedTestEngine.Connections {
         volatile boolean failDownload,failUpload,truncated,compressed,html,timeoutUpload,timeoutLatency,holdLatency,holdLatencyClose;
+        volatile int failDownloadAfter=-1,failUploadAfter=-1;
         final AtomicBoolean releaseLatency=new AtomicBoolean();final CountDownLatch latencyEntered=new CountDownLatch(1);
         volatile long delayMillis,uploadResponseMillis;final AtomicLong sent=new AtomicLong(),received=new AtomicLong(),largestUpload=new AtomicLong();
-        final AtomicInteger downloadRequests=new AtomicInteger();final CountDownLatch uploading=new CountDownLatch(1);
+        final AtomicInteger downloadRequests=new AtomicInteger(),uploadRequests=new AtomicInteger();final CountDownLatch uploading=new CountDownLatch(1);
         final CountDownLatch downloading=new CountDownLatch(1);
         public HttpURLConnection open(URL url) {
             return new HttpURLConnection(url) {
@@ -30,6 +31,7 @@ public final class SpeedTestEngineTest {
                         if(timeoutLatency)throw new SocketTimeoutException("mock latency timeout");
                     }
                     if(upload) {
+                        if(failUploadAfter>=0&&uploadRequests.incrementAndGet()>failUploadAfter)return 503;
                         uploading.countDown();
                         if(timeoutUpload||uploadResponseMillis>getReadTimeout())throw new SocketTimeoutException("mock response timeout");
                         long until=System.nanoTime()+TimeUnit.MILLISECONDS.toNanos(uploadResponseMillis);
@@ -37,7 +39,7 @@ public final class SpeedTestEngineTest {
                             if(disconnected)throw new IOException("Disconnected");
                             try {Thread.sleep(10);}catch(InterruptedException e) {throw new InterruptedIOException();}
                         }
-                    } else if(size>0)downloadRequests.incrementAndGet();
+                    } else if(size>0&&downloadRequests.incrementAndGet()>failDownloadAfter&&failDownloadAfter>=0)return 429;
                     return upload?(failUpload?503:200):size>0&&failDownload?503:200;
                 }
                 @Override public String getContentEncoding() {return compressed&&size>0?"gzip":null;}
@@ -77,8 +79,31 @@ public final class SpeedTestEngineTest {
         check(Math.abs(new SpeedTestEngine.Rate(1000000,1000000000,false).mbps()-8)<0.0001);
         for(int mode=0;mode<4;mode++) {
             e=new Endpoint();e.failDownload=mode==0;e.truncated=mode==1;e.compressed=mode==2;e.html=mode==3;
-            SpeedTestEngine.Result bad=engine(e).run();check(!bad.complete()&&!bad.error.isEmpty()&&bad.download==null&&bad.upload!=null&&e.sent.get()>0);
+            SpeedTestEngine.Result bad=engine(e).run();check(!bad.complete()&&!bad.error.isEmpty()&&bad.upload!=null&&e.sent.get()>0);
+            if(mode==1)check(bad.download!=null&&bad.download.partial&&bad.download.bytes>0&&!bad.throughputComplete());
+            else check(bad.download==null); // Invalid headers/HTML/encoding contribute no measurement bytes.
         }
+        e=new Endpoint();e.failDownloadAfter=1;
+        SpeedTestEngine.Result limited=new SpeedTestEngine(e,() -> {},QUIET,new SpeedTestEngine.Config(Long.MAX_VALUE,100003,2000,1)).run();
+        check(!limited.complete()&&!limited.throughputComplete()&&!limited.cancelled&&!limited.aborted);
+        check(limited.download!=null&&limited.download.partial&&limited.download.bytes==SpeedTestEngine.DOWNLOAD_REQUEST_BYTES);
+        check(limited.download.completionReason.equals("http_429")&&limited.download.nanos>0&&limited.download.nanos<2000000000L);
+        check(limited.upload!=null&&!limited.upload.partial&&limited.upload.bytes==100003);
+        check(limited.receivedBytes==limited.download.bytes&&e.downloadRequests.get()==2);
+        check(limited.error.contains("HTTP 429")&&limited.failures.get(0).requests.stream().anyMatch(q -> q.httpStatus==429));
+        check(Math.abs(limited.download.mbps()-limited.download.bytes*8000.0/limited.download.nanos)<0.00001);
+        e=new Endpoint();e.failDownloadAfter=0;
+        SpeedTestEngine.Result noBytes=new SpeedTestEngine(e,() -> {},QUIET,new SpeedTestEngine.Config(100003,20003,1000,1)).run();
+        check(noBytes.download==null&&noBytes.receivedBytes==0&&noBytes.upload!=null&&e.downloadRequests.get()==1);
+        e=new Endpoint();e.failUploadAfter=1;
+        SpeedTestEngine.Result uploadPartial=new SpeedTestEngine(e,() -> {},QUIET,new SpeedTestEngine.Config(100003,600000,2000,1)).run();
+        check(uploadPartial.upload!=null&&uploadPartial.upload.partial&&!uploadPartial.throughputComplete());
+        check(uploadPartial.upload.bytes==SpeedTestEngine.UPLOAD_CHUNK_BYTES&&uploadPartial.uploadAcknowledgedBytes==SpeedTestEngine.UPLOAD_CHUNK_BYTES);
+        check(uploadPartial.sentBytes==600000&&uploadPartial.upload.bytes<uploadPartial.sentBytes&&uploadPartial.upload.completionReason.equals("http_503"));
+        e=new Endpoint();e.failDownloadAfter=4;
+        SpeedTestEngine.Result parallelPartial=new SpeedTestEngine(e,() -> {},QUIET,new SpeedTestEngine.Config(Long.MAX_VALUE,20003,2000,4)).run();
+        check(parallelPartial.download!=null&&parallelPartial.download.partial&&parallelPartial.download.bytes>=SpeedTestEngine.DOWNLOAD_REQUEST_BYTES);
+        check(parallelPartial.download.bytes<=parallelPartial.receivedBytes&&parallelPartial.download.nanos<2000000000L);
         e=new Endpoint();e.failUpload=true;SpeedTestEngine.Result partial=engine(e).run();
         check(!partial.complete()&&partial.download!=null&&partial.upload==null&&partial.sentBytes<=20003);
         check(partial.failedPhase.equals("Upload")&&partial.error.contains("HTTP 503"));
@@ -155,6 +180,6 @@ public final class SpeedTestEngineTest {
         check(SpeedometerScale.fraction(0)==0&&SpeedometerScale.fraction(-5)==0&&SpeedometerScale.fraction(Double.NaN)==0);
         check(SpeedometerScale.fraction(5000)==1&&SpeedometerScale.fraction(20000)==1);
         check(SpeedometerScale.fraction(266)>SpeedometerScale.fraction(100)&&SpeedometerScale.fraction(100)>SpeedometerScale.fraction(10));
-        System.out.println("Speed tests passed: byte budgets, parallel transfers, Mbps, status/encoding/truncation, acknowledged uploads, deadlines, stop/route errors, fresh serving-only band samples and unknowns.");
+        System.out.println("Speed tests passed: retained partial download/upload rates after HTTP errors, no-byte failures, bounded parallel measurement windows, byte budgets, deadlines, Stop/route guards and serving samples.");
     }
 }

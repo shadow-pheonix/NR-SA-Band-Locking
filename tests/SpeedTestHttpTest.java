@@ -21,7 +21,13 @@ public final class SpeedTestHttpTest {
             try {
                 long bytes=Long.parseLong(exchange.getRequestURI().getQuery().split("&")[0].substring(6));
                 if(bytes==0) {if(exchange.getRequestURI().getQuery().contains("&run=3"))latencyEntered.countDown();try {Thread.sleep(1000);}catch(InterruptedException e) {return;}}
-                else {downloads.incrementAndGet();if(failDownload.get()) {exchange.sendResponseHeaders(503,-1);return;}}
+                else {
+                    int request=downloads.incrementAndGet();
+                    if(exchange.getRequestURI().getQuery().contains("&run=4")&&request>1) {
+                        exchange.getResponseHeaders().set("Retry-After","60");exchange.sendResponseHeaders(429,-1);return;
+                    }
+                    if(failDownload.get()) {exchange.sendResponseHeaders(503,-1);return;}
+                }
                 exchange.getResponseHeaders().set("Content-Type","application/octet-stream");
                 if(bytes==0)exchange.sendResponseHeaders(200,-1);
                 else {
@@ -57,7 +63,13 @@ public final class SpeedTestHttpTest {
                 check(latencyEntered.await(1,TimeUnit.SECONDS));stopped.cancel();r=f.get(2,TimeUnit.SECONDS);
                 check(r.cancelled&&downloads.get()==0&&uploads.get()==0);
             } finally {run.shutdownNow();}
-            System.out.println("Real HTTP checks passed: delayed ping headers do not block download/upload; HTTP 503 stays phase-local; Stop prevents later phases. Localhost only.");
+            failDownload.set(false);downloads.set(0);uploads.set(0);runId.set(4);
+            r=new SpeedTestEngine(local,() -> {},QUIET,new SpeedTestEngine.Config(Long.MAX_VALUE,16384,2000,1,250,100)).run();
+            check(!r.complete()&&!r.throughputComplete()&&r.download!=null&&r.download.partial);
+            check(r.download.bytes==25000000&&r.download.nanos>0&&r.download.nanos<2000000000L);
+            check(r.download.completionReason.equals("http_429")&&r.upload!=null&&r.upload.bytes==16384&&!r.upload.partial);
+            check(downloads.get()==2&&r.failures.stream().flatMap(q -> q.requests.stream()).anyMatch(q -> q.httpStatus==429));
+            System.out.println("Real HTTP checks passed: retain actual download bytes/time after HTTP 429, continue upload, no download retry, independent phases and Stop. Localhost only.");
         } finally {server.stop(0);handlers.shutdownNow();}
     }
 }

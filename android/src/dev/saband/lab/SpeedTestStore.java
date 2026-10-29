@@ -30,10 +30,30 @@ public final class SpeedTestStore {
     public static String outcome(JSONObject report) {
         if(report.optBoolean("cancelled"))return "Stopped";
         if(report.optBoolean("complete"))return "Complete";
+        if(!report.optBoolean("aborted")) {
+            boolean down=partial(report.optJSONObject("download")),up=partial(report.optJSONObject("upload"));
+            if(down||up)return (down&&up?"Transfers interrupted":down?"Download interrupted":"Upload interrupted")+" · speeds saved";
+        }
         if(report.optBoolean("throughput_complete")&&!report.optBoolean("aborted")&&report.isNull("http_latency_ms")&&report.optJSONObject("download")!=null&&report.optJSONObject("upload")!=null)return "Speeds measured · ping unavailable";
         if(report.optJSONObject("download")!=null||report.optJSONObject("upload")!=null||
             report.has("http_latency_ms")&&!report.isNull("http_latency_ms"))return "Partial results";
         return "Failed";
+    }
+    public static boolean partial(JSONObject rate) {return rate!=null&&rate.optBoolean("partial");}
+    static Object rateReport(SpeedTestEngine.Rate rate) throws JSONException {
+        if(rate==null)return JSONObject.NULL;JSONObject r=new JSONObject();r.put("mbps",rate.mbps());r.put("payload_bytes",rate.bytes);
+        r.put("elapsed_ms",rate.nanos/1000000.0);r.put("data_cap_reached",rate.capped);r.put("short_sample",rate.nanos<2000000000L);
+        r.put("complete",!rate.partial);r.put("partial",rate.partial);r.put("completion_reason",rate.completionReason);return r;
+    }
+    public static String measurementNote(JSONObject report) {
+        StringBuilder out=new StringBuilder();
+        for(String key:new String[]{"download","upload"}) {
+            JSONObject rate=report.optJSONObject(key);if(!partial(rate))continue;
+            if(out.length()>0)out.append("\n");
+            out.append(key.equals("download")?"Download":"Upload").append(String.format(Locale.ROOT," interrupted at %.1fs",rate.optDouble("elapsed_ms")/1000.0));
+            if("http_429".equals(rate.optString("completion_reason")))out.append(" · server rate limit (HTTP 429)");
+        }
+        return out.toString();
     }
     public static String render(JSONArray history,int slot) {
         StringBuilder out=new StringBuilder();for(int i=0;i<history.length();i++) {
@@ -45,6 +65,12 @@ public final class SpeedTestStore {
                 .append("\n↓ ").append(rate(r,"download")).append("   ↑ ").append(rate(r,"upload"))
                 .append("\nPing (HTTP): ").append(r.isNull("http_latency_ms")?"—":String.format(Locale.ROOT,"%.0f ms",r.optDouble("http_latency_ms")))
                 .append(String.format(Locale.ROOT,"\nPayload: %.1f MB received · %.1f MB sent",r.optLong("received_payload_bytes")/1000000.0,r.optLong("sent_payload_bytes")/1000000.0));
+            for(String key:new String[]{"download","upload"}) {
+                JSONObject rate=r.optJSONObject(key);if(rate==null||!rate.has("elapsed_ms"))continue;
+                out.append("\n").append(key.equals("download")?"Download":"Upload").append(String.format(Locale.ROOT," measured: %.1fs",rate.optDouble("elapsed_ms")/1000.0));
+                if(r.has("duration_per_direction_s"))out.append(" / ").append(r.optInt("duration_per_direction_s")).append("s requested");
+                if(partial(rate))out.append(" · interrupted sample; measured speed retained");
+            }
             JSONArray samples=r.optJSONArray("serving_samples");if(samples!=null)for(int n=0;n<samples.length();n++) {
                 JSONObject s=samples.optJSONObject(n);if(s==null)continue;
                 out.append("\n").append(s.optString("phase")).append(" · ").append(DateFormat.getTimeInstance().format(new Date(s.optLong("captured_ms"))))
@@ -70,6 +96,6 @@ public final class SpeedTestStore {
         return out.length()==0?"No tests for this SIM yet. Apply a selection, wait for service, then start a test.":out.toString();
     }
     private static String rate(JSONObject report,String key) {
-        JSONObject r=report.optJSONObject(key);return r==null?"—":String.format(Locale.ROOT,"%.1f Mbps%s",r.optDouble("mbps"),r.optBoolean("short_sample")?" (short sample)":"");
+        JSONObject r=report.optJSONObject(key);return r==null?"—":String.format(Locale.ROOT,"%.1f Mbps%s%s",r.optDouble("mbps"),partial(r)?" (interrupted)":"",r.optBoolean("short_sample")?" (short sample)":"");
     }
 }

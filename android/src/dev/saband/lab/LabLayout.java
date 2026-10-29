@@ -218,6 +218,7 @@ public final class LabLayout {
         speedStatus.setText(phase.equals("Latency")?"Measuring ping":phase);speedometer.reset(phase);speedElapsed.setText("Preparing measurement…");
     }
     public void beginSpeedTest() {
+        speedDownload.setContentDescription(null);speedUpload.setContentDescription(null);
         speedometer.reset("Checking connection");speedDownload.setText("—");speedUpload.setText("—");speedPing.setText("—");speedElapsed.setText("Connecting…");speedServing.setText("Serving band: not sampled yet");
     }
     public void idleSpeed() {beginSpeedTest();speedStatus.setText("Ready to test");speedometer.reset("Ready");speedElapsed.setText("Choose a duration and start");}
@@ -233,10 +234,13 @@ public final class LabLayout {
         speedPing.setText(report.isNull("http_latency_ms")?"—":String.format(Locale.ROOT,"%.0f",report.optDouble("http_latency_ms")));
         JSONObject last=up!=null?up:down;
         if(last!=null)speedometer.speed(last.optDouble("mbps"),up!=null?"Last upload":"Last download");else speedometer.reset("No speed result");
-        speedElapsed.setText("Results saved · tap a history entry for details");
+        String note=SpeedTestStore.measurementNote(report);
+        speedElapsed.setText(note.isEmpty()?"Results saved · tap a history entry for details":note+"\n* Measured speed retained · see history for details");
+        speedDownload.setContentDescription("Download "+speedValue(down)+" Mbps"+(SpeedTestStore.partial(down)?", interrupted sample":""));
+        speedUpload.setContentDescription("Upload "+speedValue(up)+" Mbps"+(SpeedTestStore.partial(up)?", interrupted sample":""));
         speedServing.setText("Serving (sampled): "+report.optString("serving_bands_sampled","unknown"));
     }
-    private static String speedValue(JSONObject rate) {return rate==null?"—":String.format(Locale.ROOT,"%.1f",rate.optDouble("mbps"));}
+    private static String speedValue(JSONObject rate) {return rate==null?"—":String.format(Locale.ROOT,"%.1f%s",rate.optDouble("mbps"),SpeedTestStore.partial(rate)?"*":"");}
     public void showSpeedHistory(JSONArray history,int slot) {
         speedHistoryCards.removeAllViews();int count=0;
         for(int i=0;i<history.length();i++) {JSONObject r=history.optJSONObject(i);if(r!=null&&r.optInt("slot",-1)==slot)count++;}

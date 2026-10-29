@@ -1,7 +1,7 @@
 # Compare bands with Speedtest
 
-This guide describes **SA Band Lab 0.13**, which includes the meter, timed tests
-and independent latency/download/upload phases. The older 0.11 APK used a fixed 100/20 MB cutoff
+This guide describes **SA Band Lab 0.14**, which includes the meter, timed tests,
+independent phases and retained interrupted download/upload measurements. The older 0.11 APK used a fixed 100/20 MB cutoff
 and shorter response timeout. Phone validation of the new behavior is pending.
 
 **Included in 0.13:** a 0.12 phone report failed during the
@@ -10,6 +10,13 @@ isolates latency, download and upload: an unavailable ping does not prevent
 speed measurement, and one endpoint failure does not skip the other direction.
 Stop and disallowed/changed SIM or network remain fatal. The corrected phase isolation is included in 0.13;
 phone validation is pending.
+
+**Latest 0.13 phone evidence:** three valid latency samples (median ~76.9 ms),
+about 793.6 MB download traffic before HTTP 429 at 18.33s, then a full 20s upload
+at 2.325 Mbps with 5.8125 MB acknowledged. Fresh n78 serving observations appear
+at all four boundaries. This establishes upload continuation after an endpoint
+failure. It does not establish a completed 20s download or an error-free test.
+0.13 dropped its measured download rate; 0.14 corrects that preservation bug.
 
 The user's 0.11 phone report confirms a completed download around **266 Mbps**,
 HTTP response latency around **79 ms** and fresh **n78** serving observations.
@@ -58,7 +65,9 @@ silently measuring another connection. OEM routing still needs phone testing.
 
 - Date/time, SIM slot, chosen duration, and outcome. The new source shows
   **Speeds measured · ping unavailable** when both rate phases finish without
-  a ping; otherwise Complete / Partial results / Stopped / Failed. Missing
+  a ping. Interrupted rates use Download interrupted / Upload interrupted /
+  Transfers interrupted · speeds saved; otherwise Complete / Partial results /
+  Stopped / Failed. Missing
   ping stays a dash, not zero. A timeout identifies its phase/type.
 - **Serving bands (sampled)** during that run, including observed changes or
   unknown samples. This is independent of checked bands and modem preferences.
@@ -118,9 +127,19 @@ browser benchmark methodology. It is not affiliated with Cloudflare or Ookla.
   retain their **short sample** label. Timed tests continue beyond the old
   100/20 MB limits. They are comparative estimates, not peak-radio
   measurements, an ISP dispute benchmark or a universal best-band ranking.
-- HTTP errors, compressed/unexpected downloads, truncated bodies and route
-  changes produce failures. A failed phase is not presented as a valid rate.
-  Successful measurements from independent phases are retained. Endpoint errors
+- HTTP errors, compressed/unexpected downloads and truncated bodies produce
+  phase warnings. **0.14 keeps valid bytes measured before an endpoint error**
+  as an interrupted rate, with the actual measured wall time. Invalid/error
+  response bodies contribute no measurement bytes. Partial upload rates count
+  only previously completed, HTTP 200 acknowledged payloads, never merely sent
+  bytes. A zero-valid-byte failure remains unknown, not a fabricated zero speed.
+  The number carries an asterisk on the main screen/compact history; full history
+  says interrupted and shows measured seconds versus requested seconds.
+  The `download`/`upload` objects add `complete`, `partial`, `completion_reason`;
+  `elapsed_ms` is the frozen sample duration. `throughput_complete` remains false
+  if either direction was interrupted, even when both have usable rates.
+  Earlier saved null rates are unchanged; total traffic is not enough to
+  reconstruct the precise validated sample. Endpoint errors
   are isolated; Stop or SIM/network changes terminate the run. Sent
   upload bytes and server-acknowledged bytes are reported separately; sending
   data alone does not establish upload speed. Response reads have up to 15
@@ -186,3 +205,24 @@ cover a fake provider ignoring interruption, blocked disconnect and TLS failures
 These checks pass, along with Android source compilation and the other seven
 host suites/checks. They do not prove phone TLS/QRTR/carrier routing, server
 availability, or a successful real-world upload. No new APK is built by these checks.
+
+
+## HTTP 429 and retained samples (0.14)
+
+[HTTP 429 means rate limiting](https://www.rfc-editor.org/rfc/rfc6585.html#section-4).
+The app ends the affected measurement, retains any valid earlier sample and
+reports the reason; it does not loop on the rejected request, switch providers,
+rotate addresses or silently change networks. Other independent directions may
+still run on the selected route. A 429 during ping ends remaining probes.
+
+The measurement counter and end time are frozen before asynchronous connection
+cleanup, so late worker reads cannot change an already saved rate or inflate
+its duration. Interrupted rates are comparative samples, not completed 20/60s
+benchmarks. Actual error-free durations and the existing full-speed methods are
+unchanged. Stop/SIM/network aborts remain fatal and do not promote the in-flight
+phase into a completed measurement.
+
+Host tests exercise HTTP 200 payload followed by 429, no-byte 429, parallel
+workers, partial acknowledged upload, truncated response, serialization and UI
+history labels. Real socket testing is localhost only; phone/server behavior
+requires a new on-device run. No Cloudflare stress test was run from the server.

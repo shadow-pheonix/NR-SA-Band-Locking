@@ -166,3 +166,21 @@ The signed 0.13 package inspection confirms the protected exported tile service,
 suites, report/history and real localhost HTTP suites plus 52 native modem mock
 cases pass. This does not execute TileService/SystemUI on Android or establish
 HyperOS background root behavior.
+
+
+## Interrupted rates in 0.14
+
+Main result tiles retain speeds measured before ordinary endpoint errors and
+append an asterisk to the affected direction. The status says which direction
+was interrupted and that speeds were saved. The caption shows actual measured
+time and explains a server rate limit when HTTP 429 caused it. Compact history
+retains both numbers with the same marker; the full report spells out interrupted
+samples, measured/requested time, serving bands, ping and error diagnostics.
+The sample is not labeled a full-duration success. Older history without the
+new metadata remains readable; an old null rate is not guessed from traffic.
+
+
+The signed 0.14 package passes Java/D8/AAPT2, signature and contents checks,
+including the new measurement classes and interrupted labels. Nine host suites
+(including the real localhost HTTP 429 scenario) and 52 native mocks pass.
+This does not execute the updated Android screen; a phone run is still needed.

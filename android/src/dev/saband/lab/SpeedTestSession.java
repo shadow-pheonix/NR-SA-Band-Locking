@@ -65,7 +65,7 @@ public final class SpeedTestSession {
             if(!cancelled.get())sample("After transfer");
             report.put("complete",result.complete()&&!cancelled.get());report.put("cancelled",result.cancelled||cancelled.get());report.put("error",cancelled.get()?"Stopped; incomplete results.":result.error);
             report.put("http_latency_ms",result.latencyMs<0?JSONObject.NULL:result.latencyMs);
-            report.put("download",rate(result.download));report.put("upload",rate(result.upload));
+            report.put("download",SpeedTestStore.rateReport(result.download));report.put("upload",SpeedTestStore.rateReport(result.upload));
             report.put("failed_phase",result.failedPhase);report.put("error_type",result.errorType);
             report.put("aborted",result.aborted);report.put("throughput_complete",result.throughputComplete()&&!cancelled.get());
             report.put("latency_attempts",result.latencyAttempts);report.put("latency_valid_samples",result.latencyValidSamples);
@@ -137,8 +137,4 @@ public final class SpeedTestSession {
     }
     private static Object number(int n) {return n==Integer.MAX_VALUE?JSONObject.NULL:n;}
     private static JSONArray array(int[] values) {JSONArray a=new JSONArray();if(values!=null)for(int n:values)a.put(n);return a;}
-    private static Object rate(SpeedTestEngine.Rate rate) throws JSONException {
-        if(rate==null)return JSONObject.NULL;JSONObject r=new JSONObject();r.put("mbps",rate.mbps());r.put("payload_bytes",rate.bytes);
-        r.put("elapsed_ms",rate.nanos/1000000.0);r.put("data_cap_reached",rate.capped);r.put("short_sample",rate.nanos<2000000000L);return r;
-    }
 }
