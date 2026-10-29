@@ -66,7 +66,7 @@ if [[ ! -f "$keystore" ]]; then
     [[ -z "${SA_KEYSTORE:-}" ]] || { echo "Explicit SA_KEYSTORE does not exist; refusing to replace your signing identity." >&2; exit 1; }
     "$keytool_cmd" -genkeypair -keystore "$keystore" -storetype PKCS12 -storepass:env SA_KEYSTORE_PASS -keypass:env SA_KEYSTORE_PASS -alias "$alias" -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=SA Band Lab Development"
 fi
-"$java_cmd" -jar "$signer_jar" sign --ks "$keystore" --ks-pass env:SA_KEYSTORE_PASS --ks-key-alias "$alias" --out "$here/dist/sa-band-lab-0.11-arm64.apk" "$here/build/aligned.apk"
-"$java_cmd" -jar "$signer_jar" verify --verbose "$here/dist/sa-band-lab-0.11-arm64.apk"
+"$java_cmd" -jar "$signer_jar" sign --ks "$keystore" --ks-pass env:SA_KEYSTORE_PASS --ks-key-alias "$alias" --out "$here/dist/sa-band-lab-0.12-arm64.apk" "$here/build/aligned.apk"
+"$java_cmd" -jar "$signer_jar" verify --verbose "$here/dist/sa-band-lab-0.12-arm64.apk"
 cp "$here/build/sa-helper-arm64" "$here/dist/sa-helper-arm64"
 python3 "$here/artifact_manifest.py"

@@ -19,11 +19,11 @@ history. Never publish credentials or private device identifiers here.
 - Public repository: <https://github.com/shadow-pheonix/NR-SA-Band-Locking>.
 - Canonical workspace: `/home/coder/NR-SA-Band-Locking`.
 - App/package: **SA Band Lab**, `dev.saband.lab`.
-- Latest published APK: **0.11**, version code **11**, name `0.11-sa-test`,
-  ARM64, minimum Android 11 / API 30, target API 34. Signed, checked and public
-  as an experimental prerelease. Previous releases remain unchanged.
-- Public release: [v0.11.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.11.0).
-- [0.11 APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.11.0/sa-band-lab-0.11-arm64.apk).
+- Latest completed build: **0.12**, version code **12**, name `0.12-sa-test`,
+  ARM64, minimum Android 11 / API 30, target API 34. Signed and checked;
+  publication in progress. Previous public 0.11 assets remain unchanged.
+- Release target: [v0.12.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.12.0).
+- [0.12 APK download (after publication)](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.12.0/sa-band-lab-0.12-arm64.apk).
 - **Latest modem mutation evidence remains the 0.9 phone report:** combined
   n78-only SA + NR-only Apply and modem readback succeeded, including the
   post-reboot fresh-baseline fix. The newer 0.11 report is a speed test only.
@@ -49,7 +49,9 @@ history. Never publish credentials or private device identifiers here.
   requested a speedometer. New native animated meter, result tiles, collapsed
   explanations and compact expandable history are implemented. Seven Java/report
   suites and Android source compilation pass; illustrative meter reference reviewed;
-  no new APK is authorized for these follow-ups. 0.11 stays public.
+  the user explicitly requested **“Build the latest apk”**. Version 0.12 is
+  built and signed with the existing identity. Seven Java/report suites and
+  50 native tests pass. Upload/public download verification remains to finish.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
@@ -650,7 +652,34 @@ Follow-up implementation:
   scale checks. The design reference is docs/assets/speedtest-overview.svg
   (illustrative, not an Android screenshot). Phone runtime/accuracy checks
   remain pending. Reviewed a rendered SVG design reference; it is not Android
-  rendering evidence. No new APK, DEX, signing or release operation is authorized.
+  rendering evidence. The subsequent explicit build request now authorizes
+  packaging these follow-ups in version 0.12 / code 12.
+
+## Approved 0.12 build checkpoint (2026-10-29)
+
+The user explicitly authorized the latest APK after the timed-test, timeout and
+meter source changes. App/report/QMI helper labels are 0.12, code 12; no modem
+protocol behavior changed. README and guides now describe the packaged behavior.
+
+- APK `sa-band-lab-0.12-arm64.apk`: **140,780 bytes**.
+- APK SHA-256: `0db72d0e31c3d65a98817ad918a62dd4c47cd2d9cc7d42ba26d6112576738a83`.
+- Helper SHA-256: `637696c6797fc48d2462ea561b7fb7cd6610d50555ee2315be18c052f962c4c0`.
+- Signature scheme v3 and same signing certificate as prior official builds
+  verified. Install over the prior app to preserve backups and device binding.
+- Full build, AAPT2 linking, D8, zipalign, package/code/name/API/ABI, permissions,
+  launcher/theme resources, boot components, ZIP integrity, SpeedometerView and
+  SpeedometerScale plus speed-test classes in DEX, exact production ARM64 helper
+  and 16 KiB ELF load alignment, no mock transport, README/notices/licenses pass.
+- Seven Java/report host suites, all 50 native mock methods and transport checks
+  passed. Earlier 0.11 and 0.10 APK hashes unchanged.
+- Includes 20s/60s per direction without fixed MB cutoff; adaptive upload chunks;
+  response/connect timeout improvements; partial results; original measured-
+  average dial, result tiles, collapsed explanations and compact report dialogs.
+- No new phone/emulator accuracy, upload, layout/rotation, lifecycle or routing
+  evidence. The previous partial 0.11 run is still the latest real-device report.
+- Publish APK and SHA256SUMS.txt as a new experimental prerelease and verify the
+  anonymous public download. Long timed tests may consume several GB; do not
+  repeat the historical 0.11 statement that every test is capped at 120 MB.
 
 ## Approved 0.11 build checkpoint (2026-10-29)
 
@@ -861,13 +890,11 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-The 0.11 APK remains public and unchanged. Follow-up source now fixes the short
-upload response window, adds partial results, timed Standard/Extended runs and
-the less congested meter screen. Source checks and review are complete; ask
-before building a new APK as the user requested. Do not treat 0.11 build approval
-as approval of these subsequent fixes and UI changes. Phone validation remains
-needed for the timed engine, upload, dial, history dialogs and duration/data-use
-flow; the supplied partial 0.11 run is the latest device evidence.
+The approved 0.12 APK is built, signed and validated. Complete the new prerelease
+upload and public download verification, then publish source/context updates.
+Keep old releases unchanged. Phone validation is still needed for timed tests,
+upload, dial, compact history and data-use flows; the partial 0.11 report is the
+latest device evidence. Future changes need a new explicit build approval.
 
 The approved 0.10 build/release is complete and the public APK download verified.
 Next, test native rendering/navigation, launcher appearance, font scale and

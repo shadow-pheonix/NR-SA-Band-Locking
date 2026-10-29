@@ -5,7 +5,7 @@ Version **0.11** adds **Speedtest between Bands and Tools**. Android rendering a
 phone testing. Install official APK updates over the previous app to retain
 backups.
 
-The follow-up **unreleased source** adds a native speedometer, three result tiles,
+Version **0.12** adds a native speedometer, three result tiles,
 a duration selector, collapsed explanations and compact tap-to-open reports.
 [Speedtest preview](assets/speedtest-overview.svg) is illustrative, not an Android
 screenshot. Full source behavior is described in [SPEEDTEST.md](SPEEDTEST.md).
@@ -107,19 +107,20 @@ existing operation/controller boundary. The Android theme is in
 
 ## Validation and remaining checks
 
-The signed 0.11 APK build passes, including Java/D8 and full AAPT2 resource
+The signed 0.12 APK build passes, including Java/D8 and full AAPT2 resource
 linking. Package inspection confirms the adaptive/themed icon and theme. The original five Java
 host suites cover the existing observation/radio/journal/boot logic plus the
 new Apply gates, draft detection, mask labels, and fresh/stale/cached/neighbor
 presentation. No native helper protocol code changed. These checks do not
 execute Android views or prove runtime layout, focus order, launcher behavior,
-font scaling or navigation on the phone. Review those using the 0.11 APK.
+font scaling or navigation on the phone. Review those using the 0.12 APK.
 
 The speed-test source additionally passes transfer-loop and report/history host
 tests and Android Java compilation. A tiny live 1 KB download/upload smoke check
 passed against Cloudflare. Android cellular routing, Location settings prompts,
 serving updates, actual speed accuracy and lifecycle behavior still require a
-phone test; host mocks do not establish those results. Speedtest ships in 0.11.
+phone test; host mocks do not establish those results. Speedtest was introduced
+in 0.11; the meter and sustained-test revisions ship in 0.12.
 
 Android design references:
 [navigation patterns](https://developer.android.com/design/ui/mobile/guides/layout-and-content/layout-and-nav-patterns),

@@ -17,9 +17,9 @@ meaningful checkpoint.
 
 ## Download the APK
 
-**[Download SA Band Lab 0.11 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.11.0/sa-band-lab-0.11-arm64.apk)**
+**[Download SA Band Lab 0.12 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.12.0/sa-band-lab-0.12-arm64.apk)**
 
-[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.11.0)
+[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.12.0)
 · [All releases](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases)
 
 Download the `.apk` file to install the app. GitHub's **Source code (zip)** is for
@@ -30,36 +30,38 @@ Tools** interface, a persistent SIM selector, retained draft selections and grou
 backup/recovery tools. [Preview the UI and navigation](docs/UI.md). The redesigned
 screens need phone testing; the confirmed manual modem operation below is from 0.9.
 
-### Version 0.11: Speedtest and band history
+### Version 0.12: sustained speed tests and a clearer screen
 
-Version 0.11 adds **Overview / Bands / Speedtest / Tools**. Speedtest and Location
-settings prompts still need testing on the phone; host and package checks are
-separate from real Android routing and serving-cell evidence.
+Open **Speedtest**, between Bands and Tools, after applying bands and waiting
+for usable service. The original live speedometer shows the measured phase
+average, with separate download/upload/**Ping (HTTP)** tiles. Choose
+**20-second Standard or 60-second Extended tests per direction**. Transfers
+continue throughout the chosen period, without the old 100/20 MB cutoff.
 
-After applying bands, open **Speedtest** to measure download, upload and
-**Ping (HTTP)**. Each run is saved locally with the SIM slot, timestamp and
-fresh serving-band samples during the test. Compare the last 20 runs; reports
-show unknown or observed band changes instead of assuming the selected band
-was serving. Both Start speed test and Refresh network offer **Open Location
-settings** only when the phone's Location switch is off.
+Use the selected SIM as the phone's mobile-data SIM, with Wi-Fi/VPN off. Long
+runs can use **several GB**: at 1 Gbps, 20 seconds is about **2.5 GB per direction**,
+60 seconds about **7.5 GB per direction**, plus overhead. The app confirms data
+use before each run. **Stop test** or leaving the app requests cancellation.
 
-Use the selected SIM as the phone's mobile-data SIM, turn Wi-Fi/VPN off, and
-wait for service before testing. Each confirmed run uses up to **100 MB down +
-20 MB up** payload, plus overhead, against Cloudflare. **Stop test** cancels;
-leaving the app also stops it. Full instructions, privacy and measurement limits
-are in [the speed-test guide](docs/SPEEDTEST.md).
+The last 20 runs are saved locally with SIM, timestamps, duration, rates and
+fresh serving-band samples. Three compact entries appear initially; tap one
+for its full report or expand older history. Missing serving observations remain
+unknown, and observed band changes are recorded. **Test details & data use**
+holds the longer explanations. Cloudflare receives IP/test traffic; the app
+keeps reports and cell observations local unless you share them.
 
-### Next source update: sustained tests and a clearer screen
+Version 0.12 also gives transfer connections/responses longer timeouts and adapts
+upload request size. Successful download/ping readings remain **Partial results**
+if upload fails. A user's 0.11 report confirmed about 266 Mbps download, 79 ms
+HTTP latency and n78 samples, but upload timed out; the revised timed engine,
+upload behavior and meter still need a phone test.
 
-The latest source replaces the fixed data cutoff with **20-second Standard or
-60-second Extended tests per direction**, an original live speedometer, separate
-result tiles and compact history entries. Test explanations are expandable.
-Upload responses have more time and requests adapt to the connection; partial
-results retain successful download/ping if upload fails.
+Both **Start speed test** and **Refresh network** offer **Open Location settings**
+only if the system Location switch is off. Phone/Precise location permissions
+are requested separately when missing; firmware can still omit serving bands.
 
-**This update is not in the 0.11 APK yet.** Long timed tests may use several GB;
-the app warns before every run. [Preview the new screen](docs/assets/speedtest-overview.svg)
-(illustrative design reference) and see [the current source guide](docs/SPEEDTEST.md).
+[Preview the screen](docs/assets/speedtest-overview.svg) (illustrative design
+reference) · [Full speed-test guide and limitations](docs/SPEEDTEST.md).
 
 ### Version 0.9: reboot fix and optional reapply
 

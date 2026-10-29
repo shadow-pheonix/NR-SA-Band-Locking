@@ -1,13 +1,13 @@
 # Compare bands with Speedtest
 
-The guide below describes the **unreleased follow-up source**, awaiting build
-approval. The downloadable **0.11 APK** still has a fixed 100 MB download / 20 MB
-upload limit, three-second response timeout and the previous text-heavy screen.
+This guide describes **SA Band Lab 0.12**, which includes the meter, timed tests
+and revised timeout handling. The older 0.11 APK used a fixed 100/20 MB cutoff
+and shorter response timeout. Phone validation of the new behavior is pending.
 
 The user's 0.11 phone report confirms a completed download around **266 Mbps**,
 HTTP response latency around **79 ms** and fresh **n78** serving observations.
-Upload timed out and has no valid rate in that report. The new source addresses
-that timeout and presentation; its behavior still needs a new phone test.
+Upload timed out and has no valid rate in that report. Version 0.12 revises
+that timeout handling and presentation; it still needs a new phone test.
 
 ![Speedtest design reference](assets/speedtest-overview.svg)
 
@@ -149,4 +149,4 @@ retention and meter-scale bounds. Android source compilation passes. A prior
 for the old version. These do not validate the new timed engine or meter on
 Android. Connectivity services, AtomicFile storage, Location settings, lifecycle,
 radio sampling and visual rendering still require phone validation for this
-source update. No new APK has been built.
+0.12 update. Build/package validation is separate from phone validation.
