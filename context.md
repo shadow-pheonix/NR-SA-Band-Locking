@@ -19,11 +19,11 @@ history. Never publish credentials or private device identifiers here.
 - Public repository: <https://github.com/shadow-pheonix/NR-SA-Band-Locking>.
 - Canonical workspace: `/home/coder/NR-SA-Band-Locking`.
 - App/package: **SA Band Lab**, `dev.saband.lab`.
-- Latest published APK: **0.13**, version code **13**, name `0.13-sa-test`,
+- Latest published APK: **0.14**, version code **14**, name `0.14-sa-test`,
   ARM64, minimum Android 11 / API 30, target API 34. Signed, verified and public
   as an experimental prerelease. Previous releases remain unchanged.
-- Public release: [v0.13.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.13.0).
-- [0.13 APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.13.0/sa-band-lab-0.13-arm64.apk).
+- Public release: [v0.14.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.14.0).
+- [0.14 APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.14.0/sa-band-lab-0.14-arm64.apk).
 - **Latest modem mutation evidence remains the 0.9 phone report:** combined
   n78-only SA + NR-only Apply and modem readback succeeded, including the
   post-reboot fresh-baseline fix. The newer 0.11 report is a speed test only.
@@ -39,13 +39,14 @@ history. Never publish credentials or private device identifiers here.
   2.325 Mbps with 5.8125 MB acknowledged. Fresh registered n78 samples are
   recorded at all four boundaries. This confirms upload progress after a download
   error; it does not demonstrate a fully complete speed test. No new mutation.
-- Current fix: retain validated transferred/acknowledged bytes and actual elapsed
+- Shipped in 0.14: retain validated transferred/acknowledged bytes and actual elapsed
   time as a clearly interrupted partial rate after ordinary endpoint failure;
   keep missing rates when no valid bytes were measured. Do not count 429 error
   bodies or unacknowledged upload bytes, fabricate a full 20s sample, retry around
-  rate limits, or weaken fatal Stop/SIM/network handling. Add regression tests
-  and clear per-direction UI/history labels. User explicitly authorized building
-  the APK after this fix; prepare 0.14, verify and publish without asking again.
+  rate limits, or weaken fatal Stop/SIM/network handling. Regression tests and
+  per-direction UI/history labels are implemented. User explicitly authorized building
+  the APK after this fix; 0.14 is built, verified and public. New on-device testing
+  remains pending. Older missing rates are not reconstructed from traffic totals.
 - Shipped in 0.13: 0.12's 3s latency socket timeout/6s fail-fast gate is
   replaced by an independent latency phase (5s socket, 8s total budget), followed
   by download and upload even when a measurement fails. Stop/route changes remain
@@ -55,8 +56,9 @@ history. Never publish credentials or private device identifiers here.
   added. Nine Java/report/real-HTTP suites, 52 native mocks and the full signed
   build/package checks pass. The user paused an earlier build to request a 5G
   tile, then explicitly authorized building after implementation without asking
-  again. Both tile and speed fixes are now public in 0.13; phone validation of
-  both is pending. The tile offers saved SIM/bands, combined NR-only on, mode-only
+  again. Both tile and speed fixes shipped in 0.13; its new report confirms
+  valid ping and upload after a download error. Tile delivery and a full error-free
+  speed run are still pending. The tile offers saved SIM/bands, combined NR-only on, mode-only
   LTE off, explicit LTE default during setup and live preference state. See below.
 - Neighbor-band discovery remains unresolved: serving observations only on the
   tested firmware; its experimental QMI frequency request is unsupported.
@@ -94,8 +96,8 @@ partial upload acknowledgements, parallel windows, full report serialization,
 legacy history, truncated/invalid replies and existing Stop/SIM guards. A real
 localhost HTTP test transfers 25 MB then returns 429, verifies retained bytes/time
 and continued upload with no download retry. No phone validation of the fix yet.
-Authorized version 0.14 / code 14 is built and verified; publication is in
-progress. Old public APKs remain unchanged.
+Authorized version 0.14 / code 14 is built, verified and published.
+Old public APKs remain unchanged.
 
 ## Approved 0.14 build checkpoint (2026-10-29)
 
@@ -120,8 +122,15 @@ User explicitly requested the APK build after fixing lost interrupted speeds.
   25 MB download measurement after subsequent HTTP 429 and independent upload.
 - New behavior still needs phone validation. 0.13 remains the latest phone
   evidence; its old missing download rate cannot be precisely reconstructed.
-- Publication pending at this checkpoint. Install over the existing official app
-  to preserve backups, history and tile profile.
+- Published [v0.14.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.14.0)
+  with APK + `SHA256SUMS.txt`; matching tagged source commit
+  `144ec414846e2ea052abe19811330f79e4f5b3e9`.
+- Anonymous direct APK download succeeded and matched local signed bytes and
+  SHA-256. README points to the new APK and explains interrupted results; previous
+  releases remain unchanged. Source/context sync completes in this handoff commit.
+- Install over the existing official app to preserve backups, history and tile
+  profile. A new phone speed run is needed; old null rates cannot be recovered
+  exactly from recorded traffic totals.
 
 ## Current feature work: 5G Quick Settings tile (2026-10-29)
 
@@ -1093,8 +1102,15 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-The authorized 0.13 implementation, build, verification and public prerelease
-are complete. Next: install over 0.12; select the intended SIM and read live
+The authorized 0.14 fix, build, verification and public prerelease are complete.
+Next: install over 0.13 and run a fresh speed test. Both available rates should
+remain visible even if an endpoint later fails; the interrupted direction must
+show its actual shorter duration, asterisk and saved-speed status. Check saved
+history/JSON partial/completion_reason fields and sampled serving bands. Do not
+claim the HTTP 429 will never recur or change an interrupted run to Complete.
+This exact fix has no phone evidence yet. No further APK build is pending.
+
+For the previously released 5G tile: select the intended SIM and read live
 preferences; Tools → Configure 5G tile → choose bands → Save & use LTE only.
 Add 5G to Quick Settings. Verify off reads mode 16 without changing band masks,
 on reads mode 64 plus the chosen SA mask, and the other SIM/NSA/LTE masks remain
@@ -1109,8 +1125,8 @@ failed/missing ping still reaches Before download/Before upload, and inspect
 phase_failures/operations if a throughput phase also fails. Do not describe host
 HTTP success as proof of Jio/Cloudflare/Android TLS behavior. The latest 0.13 phone evidence confirms 3/3 ping samples and full 20s upload
 after a download HTTP 429 at 18.33s, with download rate discarded despite valid
-received bytes. Fix that preservation/UI behavior and publish the authorized
-0.14 build. No full error-free phone speed test has succeeded.
+received bytes. The preservation/UI fix is now in the published 0.14 APK and needs new phone
+validation. No full error-free phone speed test has succeeded.
 
 Also test native rendering/navigation, launcher appearance, font scale and
 existing manual Apply/restore on the phone. Host checks cannot establish these
