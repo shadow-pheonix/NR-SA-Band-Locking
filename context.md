@@ -19,11 +19,11 @@ history. Never publish credentials or private device identifiers here.
 - Public repository: <https://github.com/shadow-pheonix/NR-SA-Band-Locking>.
 - Canonical workspace: `/home/coder/NR-SA-Band-Locking`.
 - App/package: **SA Band Lab**, `dev.saband.lab`.
-- Latest completed build: **0.12**, version code **12**, name `0.12-sa-test`,
-  ARM64, minimum Android 11 / API 30, target API 34. Signed and checked;
-  publication in progress. Previous public 0.11 assets remain unchanged.
-- Release target: [v0.12.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.12.0).
-- [0.12 APK download (after publication)](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.12.0/sa-band-lab-0.12-arm64.apk).
+- Latest published APK: **0.12**, version code **12**, name `0.12-sa-test`,
+  ARM64, minimum Android 11 / API 30, target API 34. Signed, verified and public
+  as an experimental prerelease. Previous releases remain unchanged.
+- Public release: [v0.12.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.12.0).
+- [0.12 APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.12.0/sa-band-lab-0.12-arm64.apk).
 - **Latest modem mutation evidence remains the 0.9 phone report:** combined
   n78-only SA + NR-only Apply and modem readback succeeded, including the
   post-reboot fresh-baseline fix. The newer 0.11 report is a speed test only.
@@ -51,7 +51,9 @@ history. Never publish credentials or private device identifiers here.
   suites and Android source compilation pass; illustrative meter reference reviewed;
   the user explicitly requested **“Build the latest apk”**. Version 0.12 is
   built and signed with the existing identity. Seven Java/report suites and
-  50 native tests pass. Upload/public download verification remains to finish.
+  50 native tests pass. APK/checksum published; anonymous public download
+  matches the signed bytes. README download and beginner guide updated.
+  The new timed engine, upload and meter still need phone validation.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
@@ -677,9 +679,13 @@ protocol behavior changed. README and guides now describe the packaged behavior.
   average dial, result tiles, collapsed explanations and compact report dialogs.
 - No new phone/emulator accuracy, upload, layout/rotation, lifecycle or routing
   evidence. The previous partial 0.11 run is still the latest real-device report.
-- Publish APK and SHA256SUMS.txt as a new experimental prerelease and verify the
-  anonymous public download. Long timed tests may consume several GB; do not
-  repeat the historical 0.11 statement that every test is capped at 120 MB.
+- Published [v0.12.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.12.0),
+  prerelease, not draft, target source `52b9a16010076a74b2418f870d7859eabb4e2fe9`.
+  APK and SHA256SUMS.txt public; anonymous download exactly matches signed local
+  bytes. README direct link and guides updated. Context completion follows the
+  tagged source without changing its APK.
+- Long timed tests may consume several GB; do not repeat the historical 0.11
+  statement that every test is capped at 120 MB.
 
 ## Approved 0.11 build checkpoint (2026-10-29)
 
@@ -890,11 +896,13 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-The approved 0.12 APK is built, signed and validated. Complete the new prerelease
-upload and public download verification, then publish source/context updates.
-Keep old releases unchanged. Phone validation is still needed for timed tests,
-upload, dial, compact history and data-use flows; the partial 0.11 report is the
-latest device evidence. Future changes need a new explicit build approval.
+The approved 0.12 APK is built, signed, verified and published; public download
+verified and README links updated. Next, test the new timed engine, upload, dial,
+compact history and data-use flows on the phone. Use the chosen data SIM with
+Wi-Fi/VPN off and usable service; inspect per-phase serving observations and
+rates, Stop behavior and Location prompts with the switch on/off. The partial
+0.11 report is still the latest device evidence. Keep releases unchanged.
+Future source changes need a new explicit build approval.
 
 The approved 0.10 build/release is complete and the public APK download verified.
 Next, test native rendering/navigation, launcher appearance, font scale and
