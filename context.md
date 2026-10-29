@@ -19,11 +19,11 @@ history. Never publish credentials or private device identifiers here.
 - Public repository: <https://github.com/shadow-pheonix/NR-SA-Band-Locking>.
 - Canonical workspace: `/home/coder/NR-SA-Band-Locking`.
 - App/package: **SA Band Lab**, `dev.saband.lab`.
-- Latest published APK: **0.12**, version code **12**, name `0.12-sa-test`,
+- Latest published APK: **0.13**, version code **13**, name `0.13-sa-test`,
   ARM64, minimum Android 11 / API 30, target API 34. Signed, verified and public
   as an experimental prerelease. Previous releases remain unchanged.
-- Public release: [v0.12.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.12.0).
-- [0.12 APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.12.0/sa-band-lab-0.12-arm64.apk).
+- Public release: [v0.13.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.13.0).
+- [0.13 APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.13.0/sa-band-lab-0.13-arm64.apk).
 - **Latest modem mutation evidence remains the 0.9 phone report:** combined
   n78-only SA + NR-only Apply and modem readback succeeded, including the
   post-reboot fresh-baseline fix. The newer 0.11 report is a speed test only.
@@ -36,18 +36,18 @@ history. Never publish credentials or private device identifiers here.
 - Earlier 0.11 report remains the only speed evidence: about 266 Mbps download,
   HTTP latency about 79 ms, upload timeout. Neither report demonstrates a full
   successful speed test, nor a modem preference change in those sessions.
-- Current source fix: 0.12's 3s latency socket timeout/6s fail-fast gate is
+- Shipped in 0.13: 0.12's 3s latency socket timeout/6s fail-fast gate is
   replaced by an independent latency phase (5s socket, 8s total budget), followed
   by download and upload even when a measurement fails. Stop/route changes remain
   fatal. Each phase owns workers/connections, with asynchronous deadline cleanup
   so stuck ping work cannot starve throughput workers. Bounded operation/HTTP
   diagnostics, valid ping counts and Speeds measured · ping unavailable status
-  added. Eight host suites/checks, including real localhost HTTP, and Android
-  compilation pass. The subsequent Build it request was paused by the user
-  before any build or version bump to add a Quick Settings tile. Public 0.12
-  stays unchanged. The user then authorized building immediately after the tile
-  implementation, without asking again. Candidate 0.13 is now built/verified;
-  publication is in progress.
+  added. Nine Java/report/real-HTTP suites, 52 native mocks and the full signed
+  build/package checks pass. The user paused an earlier build to request a 5G
+  tile, then explicitly authorized building after implementation without asking
+  again. Both tile and speed fixes are now public in 0.13; phone validation of
+  both is pending. The tile offers saved SIM/bands, combined NR-only on, mode-only
+  LTE off, explicit LTE default during setup and live preference state. See below.
 - Neighbor-band discovery remains unresolved: serving observations only on the
   tested firmware; its experimental QMI frequency request is unsupported.
 - Session-continuity documentation is now provided by this file and the
@@ -90,7 +90,7 @@ including QuickTileTest pass. Native transport + 15 EFS + 37 QMI mock cases pass
 including both-slot combined-on/mode-only-off packet checks and LTE-off rollback
 to NR-only. Tile delivery, HyperOS rendering, background root and live LTE/NR
 registration still require phone validation. The user authorized building after implementation, without asking again.
-Version 0.13 / code 13 is built and verified; publication is in progress.
+Version 0.13 / code 13 is built, verified and published.
 Nine Java/report/real-HTTP suites pass. Native transport + 15 EFS + 37 QMI
 (52 total native mock cases) pass. Phone validation is still pending.
 
@@ -117,8 +117,15 @@ speed-test fix. No native protocol change; helper label is 0.13.
 - Seven core Java suites (including QuickTileTest), report/history and real
   localhost HTTP suites pass; transport boundary checks and 52 native mocks
   pass. No emulator/phone execution was performed for the new tile or latency fix.
-- Publication is pending at this checkpoint. Install over the previous official
-  app to retain original backups; do not uninstall as part of an update.
+- Published [v0.13.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.13.0)
+  with APK + `SHA256SUMS.txt`; tagged source commit
+  `256553d0df35e3e88150232b5728551b044bd30d`.
+- Anonymous download of the direct public APK succeeded and matched the local
+  verified APK byte-for-byte and by SHA-256. README links to this APK and gives
+  tile setup instructions. Original 0.12 release remains unchanged.
+- Install over the previous official app to retain original backups; do not
+  uninstall as part of an update. Source/context publication and local sync are
+  being completed in this handoff commit.
 
 ## User intent and standing decisions
 
@@ -1017,18 +1024,23 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-The phase-isolation source fix and host checks are complete. A later build
-approval was paused before building to implement the 5G Quick Settings tile.
-The user subsequently authorized building immediately after implementation;
-finish the tile checks and build/publish 0.13 without another confirmation. The 0.12
-binary stays public and unchanged. Next device validation must establish that a
+The authorized 0.13 implementation, build, verification and public prerelease
+are complete. Next: install over 0.12; select the intended SIM and read live
+preferences; Tools → Configure 5G tile → choose bands → Save & use LTE only.
+Add 5G to Quick Settings. Verify off reads mode 16 without changing band masks,
+on reads mode 64 plus the chosen SA mask, and the other SIM/NSA/LTE masks remain
+unchanged. Test lock-screen unlock, rapid taps, busy/speed-test refusal,
+long press, root denial, reboot behavior and HyperOS display. Preference state
+is separate from actual LTE/NR registration; refresh network after settling.
+No tile/0.13 phone evidence has been received yet.
+
+For speed-test validation, establish that a
 failed/missing ping still reaches Before download/Before upload, and inspect
 phase_failures/operations if a throughput phase also fails. Do not describe host
 HTTP success as proof of Jio/Cloudflare/Android TLS behavior. The latest phone
 evidence is the 0.12 latency-only failure; no full phone speed test has succeeded.
 
-The approved 0.10 build/release is complete and the public APK download verified.
-Next, test native rendering/navigation, launcher appearance, font scale and
+Also test native rendering/navigation, launcher appearance, font scale and
 existing manual Apply/restore on the phone. Host checks cannot establish these
 results. Do not overwrite existing releases or restart NSA development. Future
 source changes need a new explicit build request.
