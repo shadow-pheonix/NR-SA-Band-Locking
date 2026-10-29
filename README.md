@@ -25,8 +25,9 @@ meaningful checkpoint.
 Download the `.apk` file to install the app. GitHub's **Source code (zip)** is for
 developers and cannot be installed as an Android app.
 
-The source includes a new adaptive radio-lock launcher icon with a themed-icon
-variant. It is pending the next APK build; the published 0.9 APK is unchanged.
+The source includes a new launcher icon and a redesigned **Overview / Bands /
+Tools** interface. [Preview the UI and navigation](docs/UI.md). These changes
+are pending the next approved APK build; the published 0.9 APK is unchanged.
 
 ### Version 0.9: reboot fix and optional reapply
 

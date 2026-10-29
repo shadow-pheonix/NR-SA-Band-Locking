@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="BandLab.Theme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:colorAccent">#54D3BE</item>
+        <item name="android:colorControlActivated">#54D3BE</item>
+        <item name="android:colorControlNormal">#9AAEC1</item>
+        <item name="android:textColorPrimary">#EBF1F8</item>
+        <item name="android:textColorSecondary">#9AAEC1</item>
+        <item name="android:windowBackground">#0A1018</item>
+        <item name="android:colorBackground">#121C28</item>
+        <item name="android:statusBarColor">#0A1018</item>
+        <item name="android:navigationBarColor">#121C28</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:alertDialogTheme">@style/BandLab.Dialog</item>
+    </style>
+    <style name="BandLab.Dialog" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">#54D3BE</item>
+        <item name="android:textColorPrimary">#EBF1F8</item>
+        <item name="android:textColorSecondary">#9AAEC1</item>
+        <item name="android:colorBackground">#121C28</item>
+    </style>
+</resources>

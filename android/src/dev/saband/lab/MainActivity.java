@@ -7,9 +7,10 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
+import android.view.WindowInsetsController;
 import android.os.Build;
 import android.os.Bundle;
 import android.telephony.CellIdentityNr;
@@ -20,7 +21,6 @@ import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.util.AtomicFile;
-import android.view.View;
 import android.widget.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -35,11 +35,11 @@ public class MainActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ArrayList<Button> actions = new ArrayList<>();
     private final ArrayList<CheckBox> bands = new ArrayList<>();
-    private LinearLayout content, bandBox;
+    private LabLayout screen;
+    private GridLayout bandBox;
     private TextView status, current, radio, supported, modemRadio;
-    private Spinner sim;
     private Button apply, restore, selectAll, deselectAll;
-    private CheckBox nrOnly, persistLock;
+    private Switch nrOnly, persistLock;
     private TextView bootStatus;
     private JSONObject activeBootPlan, lastBootResult;
     private boolean busy;
@@ -52,109 +52,140 @@ public class MainActivity extends Activity {
     private JSONObject lastChange, lastEfsResult;
     private FiveGBands bandSnapshot;
     private String lastReport = "No root operation has run.";
-    private final int ink = Color.rgb(229,236,246), muted = Color.rgb(161,177,198);
+    private boolean bindingUi;
+    private int[] restoredBands;
+    private boolean restoredNr,restoredReboot;
+    private int restoredBandScroll=-1;
+    private long bandObservedElapsed=-1;
+    private final Handler uiHandler=new Handler(Looper.getMainLooper());
+    private final Runnable ageTick=new Runnable() {public void run() {if(alive) {refreshPresentation();refreshBandLabels();uiHandler.postDelayed(this,15000);}}};
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(Color.rgb(13,21,33));
-        getWindow().setNavigationBarColor(Color.rgb(13,21,33));
-        ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(Color.rgb(13,21,33));
-        content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(22),dp(26),dp(22),dp(32)); scroll.addView(content);
-        setContentView(scroll);
-        label("SA BAND LAB",13,Color.rgb(84,211,190));
-        TextView title = label("Your SA band preferences",27,ink); title.setTypeface(null,Typeface.BOLD);
-        label("Xiaomi 13 Pro · Snapdragon 8 Gen 2\nExperimental build 0.9 · root required for modem reads and locking",14,muted);
-        label("Read live SA preferences first. Choose SA bands and NR-only mode, then apply both until reboot.",15,ink);
-        sim = new Spinner(this);
-        sim.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"SIM 1 · slot 0","SIM 2 · slot 1"}));
-        content.addView(sim);
-        sim.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            public void onNothingSelected(android.widget.AdapterView<?> p) {}
-            public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long id) {
-                slot=position; probe=null; backup=null; bandBox.removeAllViews(); bands.clear();
-                lastHelperResult=null;lastReport="No root operation has run for this SIM.";
-                lastChange=null;lastEfsResult=null;nrOnly.setChecked(false);persistLock.setChecked(false);activeBootPlan=null;lastBootResult=null;bootStatus.setText("Read preferences to check reboot reapply for this SIM slot.");
-                lastBandObservation=null;bandSnapshot=null;
-                lastModemFrequencies=null;modemRadio.setText("Read the modem's neighbor-frequency list if Android reports serving cells only.");
-                radio.setText("Refresh to see serving and nearby 5G cells reported for this SIM.");
-                supported.setText("Read live SA preferences below to load your phone's supported bands.");
-                current.setText("Read this SIM's preferences to begin."); refreshEnabled();
-            }
+        getWindow().setDecorFitsSystemWindows(false);
+        getWindow().setStatusBarColor(LabLayout.BG);getWindow().setNavigationBarColor(LabLayout.SURFACE);
+        getWindow().setNavigationBarContrastEnforced(false);
+        slot=state==null?0:Math.max(0,Math.min(1,state.getInt("slot",0)));
+        screen=new LabLayout(this,new LabLayout.Actions() {
+            public void selectSim(int next) {selectSlot(next);}
+            public void read() {readPreferences();}
+            public void refreshNetwork() {servingState();}
+            public void apply() {confirmApply();}
+            public void restore() {confirmRestore();}
+            public void selectAll() {selectBands(true);}
+            public void clearAll() {selectBands(false);}
+            public void copyReport() {MainActivity.this.copyReport();}
+            public void exportBackup() {exportBackups();}
+            public void importBackup() {importBackups();}
+            public void disableReapply() {disableRebootReapply();}
+            public void frequencies() {modemFrequencies();}
+            public void efs() {checkLegacyEfs();}
+            public void networkSettings() {openNetworkSettings();}
+            public void draftChanged() {if(!bindingUi)refreshEnabled();}
+            public void statusDetails() {new AlertDialog.Builder(MainActivity.this).setTitle("Operation details").setMessage(status.getText()).setPositiveButton("Close",null).setNeutralButton("Copy report",(d,w) -> MainActivity.this.copyReport()).show();}
         });
-        label("Available 5G bands",20,ink);
-        label("See the serving cell and nearby 5G cells reported by Android. Nearby cells may belong to other operators; this is not a complete coverage scan.",13,muted);
-        button("Refresh detected 5G bands", () -> servingState());
-        radio = label("Refresh to see serving and nearby 5G cells. This check does not change band preferences.",14,ink);
-        button("Read modem neighbor frequencies · root", () -> modemFrequencies());
-        modemRadio = label("Read the modem's neighbor-frequency list if Android reports serving cells only.",14,ink);
-        supported = label("Read live SA preferences below to load your phone's supported bands.",13,muted);
-        button("1  Read live SA preferences + backup", () -> readPreferences());
-        status = label("Ready for a read-only modem check.",16,Color.rgb(84,211,190));
-        button("Copy diagnostic report", () -> copyReport());
-        current = label("No preference read yet.",14,muted);
-        nrOnly=new CheckBox(this);nrOnly.setText("NR only (5G) · until reboot");nrOnly.setTextColor(ink);nrOnly.setTextSize(16);content.addView(nrOnly);
-        nrOnly.setOnClickListener(v -> status.setText("NR-only choice updated. Press Apply SA bands until reboot to apply it with your selected bands."));
-        label("NR only disables LTE fallback. Checkbox and band changes take effect together when you press Apply. Untick and apply to restore the captured earlier radio mode.",13,muted);
-        persistLock=new CheckBox(this);persistLock.setText("Reapply after reboot");persistLock.setTextColor(ink);persistLock.setTextSize(16);content.addView(persistLock);
-        persistLock.setOnClickListener(v -> status.setText("Reboot choice is pending. Press Apply to save it with a verified band and radio-mode selection."));
-        label("Off: temporary until reboot. On: reapply the verified bands and radio mode after boot and first unlock. Saved with Apply for this SIM slot. Root must remain granted; Android may delay background work.",13,muted);
-        bootStatus=label("Read preferences to check reboot reapply for this SIM slot.",13,muted);
-        button("Disable reboot reapply",() -> {
-            final int s=slot;
-            work("Disabling reboot reapply…",() -> {
-                BootPlans.clear(this,s);
-                ui(() -> {activeBootPlan=null;persistLock.setChecked(false);showBootStatus();status.setText("Reboot reapply disabled for this SIM slot. Current modem preferences were not changed.");});
-            });
-        });
-        label("Choose SA bands",19,ink);
-        label("Choices are the intersection of your captured SA preference and the modem's NR capability list. An existing lock may narrow this list. Capabilities do not prove SA availability on your network.",13,muted);
-        bandBox = new LinearLayout(this); bandBox.setOrientation(LinearLayout.VERTICAL); content.addView(bandBox);
-        selectAll=button("Select all bands",() -> selectBands(true));
-        deselectAll=button("Deselect all bands",() -> selectBands(false));
-        apply = button("2  Apply SA bands until reboot", () -> confirmApply());
-        restore = button("Restore captured SA preferences", () -> confirmRestore());
-        label("Apply saves your previous settings, then applies SA bands and your NR-only choice together. NSA and LTE band preferences are preserved. Keep an exported backup. Restore captured SA preferences restores the original SA mask and keeps the current radio mode.",13,muted);
-        button("Check original EFS path (read only)", () -> {
-            final int s=slot;
-            work("Checking the original EFS override…",() -> {
-                JSONObject r=invoke("probe",""+s);
-                ui(() -> status.setText(r.optBoolean("ok")?"EFS preferences exist. The primary controls still use the separate QMI backup.":r.optString("error")+"\nNo preference file was written. Use the live QMI read above."));
-            });
-        });
-        button("Export backups", () -> exportBackups());
-        button("Import backups", () -> importBackups());
-        button("Open mobile network settings", () -> {
-            try { startActivity(new Intent(android.provider.Settings.ACTION_NETWORK_OPERATOR_SETTINGS)); }
-            catch(Exception e) { startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS)); }
-        });
+        actions.addAll(screen.actions);bandBox=screen.bandBox;status=screen.status;current=screen.current;radio=screen.radio;
+        supported=screen.supported;modemRadio=screen.modemRadio;bootStatus=screen.bootStatus;
+        nrOnly=screen.nrOnly;persistLock=screen.persistLock;apply=screen.apply;restore=screen.restore;selectAll=screen.selectAll;deselectAll=screen.deselectAll;
+        setContentView(screen.root);
+        WindowInsetsController bars=getWindow().getInsetsController();if(bars!=null)bars.setSystemBarsAppearance(0,WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS|WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+        resetSlot(slot);
+        if(state!=null) {
+            restoredBands=state.getIntArray("draft_bands");restoredNr=state.getBoolean("draft_nr");restoredReboot=state.getBoolean("draft_reboot");
+            restoredBandScroll=state.getInt("scroll_"+UiPresentation.BANDS,0);
+            screen.showPage(state.getInt("page",UiPresentation.OVERVIEW));
+            for(int page=0;page<3;page++)screen.restoreScroll(page,state.getInt("scroll_"+page,0));
+            if(restoredBands!=null)status.setText("Read preferences again to restore your previous selection for review.");
+        }
         refreshEnabled();
     }
-    private int dp(int n) {return Math.round(n*getResources().getDisplayMetrics().density);}
-    private TextView label(String text,int size,int color) {
-        TextView v=new TextView(this);v.setText(text);v.setTextSize(size);v.setTextColor(color);v.setPadding(0,dp(6),0,dp(9));content.addView(v);return v;
+    private void selectSlot(int next) {
+        if(busy||next==slot)return;
+        if(hasDraft())new AlertDialog.Builder(this).setTitle("Switch SIM?").setMessage("Your unapplied band and radio choices will be cleared. The modem will not be changed.")
+                .setNegativeButton("Keep editing",null).setPositiveButton("Switch SIM",(d,w) -> resetSlot(next)).show();
+        else resetSlot(next);
     }
-    private Button button(String text,Runnable action) {
-        Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextColor(ink);b.setTextSize(15);
-        GradientDrawable bg=new GradientDrawable();bg.setColor(Color.rgb(27,43,61));bg.setCornerRadius(dp(12));b.setBackground(bg);
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(53));lp.topMargin=dp(9);lp.bottomMargin=dp(4);content.addView(b,lp);
-        b.setOnClickListener(v -> action.run());actions.add(b);return b;
+    private void resetSlot(int next) {
+        bindingUi=true;
+        slot=next;probe=null;backup=null;bandBox.removeAllViews();bands.clear();restoredBands=null;restoredBandScroll=-1;
+        lastHelperResult=null;lastReport="No root operation has run for this SIM.";
+        lastChange=null;lastEfsResult=null;nrOnly.setChecked(false);persistLock.setChecked(false);activeBootPlan=null;lastBootResult=null;
+        lastBandObservation=null;bandSnapshot=null;bandObservedElapsed=-1;lastModemFrequencies=null;
+        modemRadio.setText("Optional query. Some firmware does not support neighbor-frequency discovery.");
+        radio.setText("Refresh network to see serving and nearby cells reported for this SIM.");
+        supported.setText("Read preferences to load your phone's reported NR band support.");
+        current.setText("No modem preferences read yet.");bootStatus.setText("Saved reboot plan: not checked.");
+        status.setText("SIM "+(slot+1)+" · Read preferences to get started.");screen.setSlot(slot);
+        screen.showBandEmpty("Your selectable bands will appear after a successful read.");bindingUi=false;refreshEnabled();
     }
+    private void disableRebootReapply() {
+        final int s=slot;
+        work("Disabling reboot reapply…",() -> {BootPlans.clear(this,s);ui(() -> {
+            activeBootPlan=null;persistLock.setChecked(false);showBootStatus();status.setText("Reboot reapply disabled for this SIM slot. Current modem preferences were not changed.");
+        });});
+    }
+    private void checkLegacyEfs() {
+        final int s=slot;
+        work("Checking the legacy EFS path…",() -> {
+            JSONObject r=invoke("probe",""+s);
+            ui(() -> status.setText(r.optBoolean("ok")?"Legacy EFS preferences exist. Normal band control uses QMI.":"Legacy EFS check: "+r.optString("error")+"\nThis check does not affect QMI band locking. See Tools for the report."));
+        });
+    }
+    private void openNetworkSettings() {
+        try {startActivity(new Intent(android.provider.Settings.ACTION_NETWORK_OPERATOR_SETTINGS));}
+        catch(Exception e) {startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS));}
+    }
+    private boolean ready() {return probe!=null&&probe.optBoolean("ok")&&backup!=null&&matchesDevice(backup);}
+    private int selectedCount() {int count=0;for(CheckBox band:bands)if(band.isChecked())count++;return count;}
+    private int[] selectedBands() {
+        int[] result=new int[selectedCount()];int i=0;for(CheckBox band:bands)if(band.isChecked())result[i++]=(Integer)band.getTag();return result;
+    }
+    private String selectedMask() {
+        byte[] mask=new byte[64];for(int band:selectedBands())mask[(band-1)/8]|=(byte)(1<<((band-1)%8));
+        StringBuilder hex=new StringBuilder();for(byte b:mask) {hex.append(Character.forDigit((b&255)>>>4,16));hex.append(Character.forDigit(b&15,16));}return hex.toString();
+    }
+    private boolean hasDraft() {return ready()&&UiPresentation.dirty(selectedMask(),probe.optString("sa_hex"),nrOnly.isChecked(),probe.optInt("rat_mode_preference",-1),persistLock.isChecked(),activeBootPlan!=null);}
+    private void restoreChoices(int[] selected,boolean nr,boolean reboot) {
+        if(selected==null||!ready())return;
+        bindingUi=true;HashSet<Integer> wanted=new HashSet<>();for(int n:selected)wanted.add(n);
+        for(CheckBox band:bands)band.setChecked(wanted.contains((Integer)band.getTag()));nrOnly.setChecked(nr);persistLock.setChecked(reboot);bindingUi=false;
+    }
+    private long observationElapsed() {return bandObservedElapsed<0?-1:Math.max(0,SystemClock.elapsedRealtime()-bandObservedElapsed);}
+    private void refreshPresentation() {
+        if(screen==null)return;
+        String freshness=lastBandObservation==null?"Not refreshed":lastBandObservation.has("error")?"Refresh failed":
+                "Snapshot · "+java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(new Date(lastBandObservation.optLong("captured_ms")));
+        int rat=lastBandObservation==null?-1:lastBandObservation.optInt("data_rat",-1);
+        screen.showNetwork(UiPresentation.network(bandSnapshot,observationElapsed(),lastBandObservation!=null&&lastBandObservation.optBoolean("cached_may_include_other_sims")),freshness,rat==20?"5G NR":rat==13?"LTE":"");
+        screen.showPreferencesSummary(probe==null?"":bandNames(probe.optString("sa_hex")),UiPresentation.mode(probe==null?-1:probe.optInt("rat_mode_preference",-1)),ready(),backup!=null,backup!=null&&matchesDevice(backup),probe==null?"":probe.optString("transport"));
+        screen.showDraft(selectedCount(),hasDraft(),ready(),nrOnly.isChecked(),persistLock.isChecked());screen.setBusy(busy);
+    }
+    @Override protected void onSaveInstanceState(Bundle state) {
+        super.onSaveInstanceState(state);state.putInt("slot",slot);state.putInt("page",screen.page());
+        for(int page=0;page<3;page++)state.putInt("scroll_"+page,screen.scrollY(page));
+        if(ready()) {state.putIntArray("draft_bands",selectedBands());state.putBoolean("draft_nr",nrOnly.isChecked());state.putBoolean("draft_reboot",persistLock.isChecked());}
+        else if(restoredBands!=null) {state.putIntArray("draft_bands",restoredBands);state.putBoolean("draft_nr",restoredNr);state.putBoolean("draft_reboot",restoredReboot);}
+    }
+    @Override protected void onResume() {super.onResume();uiHandler.removeCallbacks(ageTick);uiHandler.post(ageTick);}
+    @Override protected void onPause() {uiHandler.removeCallbacks(ageTick);super.onPause();}
     private void refreshEnabled() {
         for(Button b:actions)b.setEnabled(!busy);
-        if(sim!=null)sim.setEnabled(!busy);
-        for(CheckBox b:bands)b.setEnabled(!busy);
-        boolean ready=probe!=null&&probe.optBoolean("ok")&&backup!=null&&matchesDevice(backup);
+        for(CheckBox b:bands) {b.setEnabled(!busy);b.setAlpha(busy?0.55f:1f);}
+        boolean ready=ready();
         if(nrOnly!=null)nrOnly.setEnabled(!busy&&ready&&probe.optInt("rat_mode_preference",-1)>0);
         if(persistLock!=null)persistLock.setEnabled(!busy&&ready);
+        if(nrOnly!=null)nrOnly.setAlpha(nrOnly.isEnabled()?1f:0.42f);
+        if(persistLock!=null)persistLock.setAlpha(persistLock.isEnabled()?1f:0.42f);
         if(selectAll!=null)selectAll.setEnabled(!busy&&ready&&!bands.isEmpty());
         if(deselectAll!=null)deselectAll.setEnabled(!busy&&ready&&!bands.isEmpty());
-        if(apply!=null)apply.setEnabled(!busy&&ready&&probe.optBoolean("write_ready")&&!bands.isEmpty());
+        if(apply!=null)apply.setEnabled(UiPresentation.canApply(ready,probe!=null&&probe.optBoolean("write_ready"),busy,selectedCount(),probe==null?-1:probe.optInt("rat_mode_preference",-1)));
         if(restore!=null)restore.setEnabled(!busy&&ready);
-        for(Button b:actions)b.setAlpha(b.isEnabled()?1f:0.35f);
+        for(Button b:actions)b.setAlpha(b.isEnabled()?1f:0.42f);
+        refreshPresentation();
     }
     private interface Job {void run() throws Exception;}
     private void work(String text,Job job) {
+        if(busy)return;
         busy=true;status.setText(text);refreshEnabled();
         worker.execute(() -> {
             try {synchronized(PreferenceStore.LOCK) {job.run();}}
@@ -162,7 +193,7 @@ public class MainActivity extends Activity {
             finally {ui(() -> {busy=false;refreshEnabled();});}
         });
     }
-    private void ui(Runnable r) {if(alive)runOnUiThread(() -> {if(alive)r.run();});}
+    private void ui(Runnable r) {if(alive)runOnUiThread(() -> {if(alive) {r.run();refreshPresentation();}});}
     private AtomicFile backupFile(int s) {return new AtomicFile(new File(getFilesDir(),"qmi-sa-backup-slot"+s+".json"));}
     private JSONObject loadBackup(int s) throws Exception {
         AtomicFile f=backupFile(s);
@@ -182,6 +213,8 @@ public class MainActivity extends Activity {
     }
     private void readPreferences() {
         final int s=slot;
+        final int[] keep=hasDraft()?selectedBands():restoredBands;
+        final boolean keepNr=hasDraft()?nrOnly.isChecked():restoredNr,keepReboot=hasDraft()?persistLock.isChecked():restoredReboot;
         work("Reading live preferences and NR capabilities…",() -> {
             JSONObject r=invoke("qmi-probe",""+s);JSONObject b=loadBackup(s);
             if(r.optBoolean("ok")) {
@@ -196,28 +229,33 @@ public class MainActivity extends Activity {
                 }
             }
             JSONObject selected=b,change=loadLastChange(s),plan=BootPlans.load(this,s),bootResult=PreferenceStore.read(this,"boot-result-slot"+s+".json");
-            ui(() -> {probe=r;backup=selected;lastChange=change;activeBootPlan=plan;lastBootResult=bootResult;persistLock.setChecked(plan!=null);showBootStatus();status.setText(r.optBoolean("ok")?(r.optBoolean("write_ready")?"Live preferences read. Backup and NR capability list are ready.":"Live preferences backed up. Apply disabled: "+r.optString("capability_error")):r.optString("error","Read failed.")+"\nNo preference SET was sent. Copy the diagnostic report above.");showPreferences();});
+            ui(() -> {probe=r;backup=selected;lastChange=change;activeBootPlan=plan;lastBootResult=bootResult;persistLock.setChecked(plan!=null);showBootStatus();status.setText(r.optBoolean("ok")?(r.optBoolean("write_ready")?"Live preferences read. Backup and NR capability list are ready.":"Live preferences backed up. Apply disabled: "+r.optString("capability_error")):r.optString("error","Read failed.")+"\nNo preference SET was sent. Open Tools to copy the diagnostic report.");showPreferences();
+                if(ready()&&keep!=null) {restoreChoices(keep,keepNr,keepReboot);restoredBands=null;status.setText(r.optBoolean("write_ready")?"Previous choices restored where still selectable. Review them, then press Apply.":"Preferences read. Apply is unavailable: "+r.optString("capability_error"));}
+                if(ready()&&restoredBandScroll>=0) {screen.restoreScroll(UiPresentation.BANDS,restoredBandScroll);restoredBandScroll=-1;}
+            });
         });
     }
     private void showPreferences() {
-        if(nrOnly!=null)nrOnly.setChecked(probe!=null&&probe.optInt("rat_mode_preference",-1)==64);
-        bandBox.removeAllViews();bands.clear();
-        if(probe==null||!probe.optBoolean("ok")) {
-            current.setText(probe!=null&&probe.has("sa_hex")?"Last observed SA preference: "+bandNames(probe.optString("sa_hex"))+"\nRadio mode: RAT mask "+probe.optInt("rat_mode_preference",-1)+"\nRead live SA preferences before retrying.":"Transport or preference read failed. Read live SA preferences again or copy the diagnostic report.");return;
-        }
-        supported.setText("Phone-supported 5G bands: "+bandNames(probe.optString("supported_nr_hex"))+"\nSupport does not establish local coverage. Refresh above to see detected cells.");
-        current.setText("SA preference: "+bandNames(probe.optString("sa_hex"))+"\nRadio mode: "+(probe.optInt("rat_mode_preference",-1)==64?"NR only":"RAT mask "+probe.optInt("rat_mode_preference",-1))+"\nTransport: "+probe.optString("transport"));
-        if(backup==null)return;
-        if(!matchesDevice(backup)) {status.setText("Backup is from a different device, firmware or older read format. It is preserved; writes are disabled. Export it and copy the diagnostic report for review.");probe=null;return;}
-        String original=backup.optString("original_sa"),currentMask=probe.optString("sa_hex"),supported=probe.optString("supported_nr_hex");
-        for(int n=1;n<=512;n++)if(hasBand(original,n)&&hasBand(supported,n)) {
-            CheckBox b=new CheckBox(this);b.setText(bandChoiceLabel(n));b.setTextColor(ink);b.setTextSize(16);b.setTag(n);b.setChecked(hasBand(currentMask,n));bandBox.addView(b);bands.add(b);
-        }
-        if(bands.isEmpty()) {TextView t=new TextView(this);t.setText("No verified selectable NR bands. Apply is disabled; no defaults are guessed.");t.setTextColor(muted);bandBox.addView(t);}
+        bindingUi=true;
+        try {
+            nrOnly.setChecked(probe!=null&&probe.optInt("rat_mode_preference",-1)==64);
+            bandBox.removeAllViews();bands.clear();
+            if(probe==null||!probe.optBoolean("ok")) {
+                current.setText(probe!=null&&probe.has("sa_hex")?"Last observed: "+bandNames(probe.optString("sa_hex"))+"\n"+UiPresentation.mode(probe.optInt("rat_mode_preference",-1)):"No verified preference read available.");
+                screen.showBandEmpty("Read live preferences before choosing bands. Tools contains the diagnostic report.");return;
+            }
+            supported.setText("Reported NR support: "+bandNames(probe.optString("supported_nr_hex"))+"\nSupported bands do not establish local coverage.");
+            current.setText("Current: "+bandNames(probe.optString("sa_hex"))+"\n"+UiPresentation.mode(probe.optInt("rat_mode_preference",-1)));
+            if(backup==null) {screen.showBandEmpty("Read preferences to capture a matching backup.");return;}
+            if(!matchesDevice(backup)) {status.setText("The captured backup does not match this device or firmware. It is preserved; writes are disabled. Export it from Tools for review.");probe=null;screen.showBandEmpty("A matching original backup is required before Apply.");return;}
+            String original=backup.optString("original_sa"),currentMask=probe.optString("sa_hex"),support=probe.optString("supported_nr_hex");
+            for(int n=1;n<=512;n++)if(hasBand(original,n)&&hasBand(support,n))bands.add(screen.addBand(n,bandObservation(n),hasBand(currentMask,n)));
+            screen.showBandEmpty(bands.isEmpty()?"No verified selectable NR bands. Apply stays disabled; no defaults are guessed.":"");
+        } finally {bindingUi=false;}
     }
     private void selectBands(boolean checked) {
-        for(CheckBox b:bands)b.setChecked(checked);
-        status.setText(checked?"All selectable bands selected. Tap Apply to change the SA preference.":"All bands deselected. Select at least one before applying.");
+        bindingUi=true;for(CheckBox b:bands)b.setChecked(checked);bindingUi=false;refreshEnabled();
+        status.setText(checked?"All selectable bands selected. Press Apply when ready.":"Selection cleared. Choose at least one band to apply.");
     }
     private AtomicFile changeFile(int s) {return new AtomicFile(new File(getFilesDir(),"qmi-last-change-slot"+s+".json"));}
     private JSONObject loadLastChange(int s) throws Exception {AtomicFile f=changeFile(s);return f.getBaseFile().exists()?new JSONObject(new String(f.readFully(),StandardCharsets.UTF_8)):null;}
@@ -227,17 +265,23 @@ public class MainActivity extends Activity {
         try {stream=f.startWrite();stream.write(record.toString().getBytes(StandardCharsets.UTF_8));f.finishWrite(stream);}catch(Exception e) {if(stream!=null)f.failWrite(stream);throw e;}
         ui(() -> lastChange=record);
     }
-    private String bandChoiceLabel(int band) {return "n"+band+" · "+(bandSnapshot==null?"Detection not checked":bandSnapshot.bandState(band));}
-    private void refreshBandLabels() {for(CheckBox b:bands)b.setText(bandChoiceLabel((Integer)b.getTag()));}
+    private String bandObservation(int band) {
+        String label=UiPresentation.bandState(bandSnapshot,band,observationElapsed());
+        if(lastBandObservation!=null&&lastBandObservation.optBoolean("cached_may_include_other_sims")) {
+            if("Serving".equals(label))return "Cached serving";if("Nearby cell".equals(label))return "Cached nearby";
+        }
+        return label;
+    }
+    private void refreshBandLabels() {if(screen!=null)for(CheckBox b:bands)screen.labelBand(b,(Integer)b.getTag(),bandObservation((Integer)b.getTag()));}
     private static boolean hasBand(String hex,int band) {
         if(!hex.matches("[0-9a-fA-F]{128}"))return false;
         int at=((band-1)/8)*2;return (Integer.parseInt(hex.substring(at,at+2),16)&(1<<((band-1)%8)))!=0;
     }
     private static String bandNames(String hex) {
-        ArrayList<String> names=new ArrayList<>();for(int i=1;i<=512;i++)if(hasBand(hex,i))names.add("n"+i);
-        return names.isEmpty()?"no explicit band bits":String.join(", ",names);
+        return UiPresentation.bandNames(hex);
     }
     private void confirmApply() {
+        if(busy||!ready()||!probe.optBoolean("write_ready"))return;
         byte[] mask=new byte[64];int count=0;
         for(CheckBox b:bands)if(b.isChecked()) {int n=(Integer)b.getTag()-1;mask[n/8]|=(byte)(1<<(n%8));count++;}
         if(count==0) {status.setText("Select at least one SA band.");return;}
@@ -248,10 +292,11 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle(persistRequested?"Apply SA bands and reapply after reboot?":"Apply SA bands until reboot?").setMessage(bandNames(target)+"\n\n"+(nrRequested?"NR only: on. LTE fallback is disabled.":"NR only: off. Restore the captured earlier mode if currently NR only; otherwise keep the current mode.")+"\n\n"+(persistRequested?"After verification, save this selection for automatic reapply after boot and first unlock.":"Reboot reapply will be disabled for this SIM slot.")+"\n\nApply bands and radio mode together, then verify both. NSA and LTE band preferences are preserved.").setNegativeButton("Cancel",null).setPositiveButton("Apply",(d,w) -> mutate(false,target,nrRequested,persistRequested)).show();
     }
     private void confirmRestore() {
-        new AlertDialog.Builder(this).setTitle("Restore captured SA bytes?").setMessage("Restores the exact SA preference captured by this app. Reboot reapply is disabled for this SIM slot. The current radio mode and NSA preference are preserved. Any pending NR-only checkbox change is not applied by this Restore button.").setNegativeButton("Cancel",null).setPositiveButton("Restore",(d,w) -> mutate(true,backup.optString("original_sa"),false,false)).show();
+        if(busy||!ready())return;
+        new AlertDialog.Builder(this).setTitle("Restore captured SA preferences?").setMessage("Restores the original SA preferences saved by this app and disables reboot reapply for this SIM slot. Your current radio mode is kept. Any pending NR-only choice is not applied by Restore.").setNegativeButton("Cancel",null).setPositiveButton("Restore",(d,w) -> mutate(true,backup.optString("original_sa"),false,false)).show();
     }
     private void mutate(boolean restoring,String target,boolean nrRequested,boolean persistRequested) {
-        final int s=slot;
+        final int s=slot;final int[] choices=selectedBands();
         work(restoring?"Restoring and verifying SA…":"Applying and verifying SA…",() -> {
             // Cancel old intent first. A failed/uncertain replacement cannot silently rearm it.
             BootPlans.clear(this,s);
@@ -282,12 +327,13 @@ public class MainActivity extends Activity {
                 backup=b;activeBootPlan=plan;persistLock.setChecked(plan!=null);showBootStatus();
                 if(r.has("sa_hex"))probe=r;else probe=null;
                 showPreferences();
-                status.setText(r.optBoolean("ok")?(restoring?"Captured SA bytes restored; readback verified.":"SA bands and radio-mode readback verified. "+(plan!=null?"Reboot reapply saved. ":"Reboot reapply is off. ")+"Check serving state separately."):r.optString("error"));
+                if(!r.optBoolean("ok")&&!restoring) {restoredBands=choices;restoredNr=nrRequested;restoredReboot=persistRequested;}
+                status.setText(r.optBoolean("ok")?(restoring?"Captured SA preferences restored and verified.":"SA bands and radio mode verified. "+(plan!=null?"Reboot reapply saved. ":"Reboot reapply is off. ")+"Refresh network to check the serving cell."):r.optString("error"));
             });
         });
     }
     private void showBootStatus() {
-        String text=activeBootPlan==null?"Saved reboot reapply: off.":"Saved reboot reapply: "+bandNames(activeBootPlan.optString("target_sa"))+" · RAT mask "+activeBootPlan.optInt("target_radio_mode",-1)+". Applies to this SIM slot.";
+        String text=activeBootPlan==null?"Saved reboot plan: off.":"Saved reboot plan: "+bandNames(activeBootPlan.optString("target_sa"))+" · "+UiPresentation.mode(activeBootPlan.optInt("target_radio_mode",-1))+". Applies to this SIM slot.";
         if(lastBootResult!=null) {
             JSONObject result=lastBootResult.optJSONObject("helper_result");
             text+="\nLast boot attempt: "+(result!=null&&result.optBoolean("ok")?"verified.":result==null?"unknown.":result.optString("error","Failed; copy diagnostic report."));
@@ -336,7 +382,7 @@ public class MainActivity extends Activity {
                     if(loadBackup(s)!=null)throw new IOException("A backup already exists for SIM "+(s+1)+". Import will not overwrite it.");
                 }
                 for(int j=0;j<list.length();j++) {JSONObject b=list.getJSONObject(j);saveBackup(b.getInt("slot"),b);}
-                ui(() -> {probe=null;backup=null;status.setText("Backup imported. Read preferences before restoring.");});
+                ui(() -> {probe=null;backup=null;bandBox.removeAllViews();bands.clear();screen.showBandEmpty("Backup imported. Read preferences to verify this SIM before applying or restoring.");status.setText("Backup imported. Read preferences before restoring.");});
             }
         });
     }
@@ -374,7 +420,9 @@ public class MainActivity extends Activity {
     }
     private void servingState() {
         if(checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED||checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.READ_PHONE_STATE,Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},7);return;
+            new AlertDialog.Builder(this).setTitle("Read cellular observations?")
+                .setMessage("Android requires Phone and Precise location permission to expose serving and nearby cells. Cell identities can reveal location. This app does not request GPS coordinates or upload location. Root-based band control works without these permissions.")
+                .setNegativeButton("Not now",null).setPositiveButton("Continue",(d,w) -> requestPermissions(new String[]{Manifest.permission.READ_PHONE_STATE,Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},7)).show();return;
         }
         final int s=slot;
         work("Reading serving and nearby 5G cells…",() -> {
@@ -409,10 +457,10 @@ public class MainActivity extends Activity {
             }
             FiveGBands snapshot=new FiveGBands(found);text.append(snapshot.render());
             JSONObject observation=new JSONObject();observation.put("slot",s);observation.put("captured_ms",System.currentTimeMillis());observation.put("data_rat",rat);observation.put("source",cached?"android_cached":"android_cell_update");observation.put("cached_may_include_other_sims",cached);observation.put("request_completed",completed);observation.put("update_error",updateError.get());observation.put("nr_cells",entries);observation.put("complete_band_scan",false);
-            ui(() -> {bandSnapshot=snapshot;lastBandObservation=observation;radio.setText(text.toString());refreshBandLabels();status.setText("5G observations refreshed. Nearby cells are included when Android reports them.");});
+            ui(() -> {bandSnapshot=snapshot;bandObservedElapsed=SystemClock.elapsedRealtime();lastBandObservation=observation;radio.setText(text.toString());refreshBandLabels();status.setText("5G observations refreshed. Nearby cells are included when Android reports them.");});
           } catch(Exception e) {
             JSONObject failure=new JSONObject();failure.put("slot",s);failure.put("error",e.toString());failure.put("complete_band_scan",false);
-            ui(() -> {bandSnapshot=null;lastBandObservation=failure;radio.setText("Could not refresh 5G cells: "+e.getMessage()+"\nEnable Location and grant Phone and precise location permissions, then retry.");refreshBandLabels();status.setText("5G detection failed. Band preferences were not changed.");});
+            ui(() -> {bandSnapshot=null;bandObservedElapsed=-1;lastBandObservation=failure;radio.setText("Could not refresh 5G cells: "+e.getMessage()+"\nEnable Location and grant Phone and precise location permissions, then retry.");refreshBandLabels();status.setText("5G detection failed. Band preferences were not changed.");});
           }
         });
     }
@@ -422,6 +470,12 @@ public class MainActivity extends Activity {
         if(request==7&&grants.length==3&&grants[0]==0&&grants[1]==0)servingState();
         else if(request==7)status.setText("Serving-state permission was not granted. Preference operations remain available.");
     }
-    @Override public void onBackPressed() {if(busy)Toast.makeText(this,"Wait for the modem transaction to finish.",Toast.LENGTH_SHORT).show();else super.onBackPressed();}
-    @Override protected void onDestroy() {alive=false;worker.shutdown();super.onDestroy();}
+    @Override public void onBackPressed() {
+        if(screen.page()!=UiPresentation.OVERVIEW) {screen.showPage(UiPresentation.OVERVIEW);return;}
+        if(busy) {Toast.makeText(this,"Wait for the modem operation to finish.",Toast.LENGTH_SHORT).show();return;}
+        if(hasDraft())new AlertDialog.Builder(this).setTitle("Leave without applying?").setMessage("Your current choices have not been applied. The modem will not be changed.")
+                .setNegativeButton("Keep editing",null).setPositiveButton("Leave",(d,w) -> finish()).show();
+        else super.onBackPressed();
+    }
+    @Override protected void onDestroy() {alive=false;uiHandler.removeCallbacks(ageTick);worker.shutdown();super.onDestroy();}
 }

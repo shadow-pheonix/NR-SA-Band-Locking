@@ -34,12 +34,15 @@ history. Never publish credentials or private device identifiers here.
   registration or universal RF enforcement from preference readback alone.
 - Neighbor-band discovery remains unresolved. Android returned serving cells
   only; the experimental QMI frequency query is rejected by this firmware.
-- Latest request: **add a good app icon**. Source now includes an original
-  mint radio-lock design on a dark navy gradient, adaptive round/square masks
-  and a monochrome themed layer. The manifest and build pipeline reference it.
-  Icon resources compile and preview checks are complete; **no new APK has been
-  built or authorized for this request yet**. Ask about the build after review.
-  The published 0.9 artifact remains unchanged and does not contain the icon.
+- Latest request: **overhaul the UI and navigation; refine UI/UX**, following
+  the source-only icon task. A native three-page Overview / Bands / Tools shell
+  is implemented, with persistent SIM selection, retained tab views, staged
+  band/mode choices, a visible Apply footer and grouped recovery/advanced tools.
+  Android source/resource compilation and five Java host suites pass; the
+  illustrative design reference and controller wiring have been reviewed.
+  Native Android views have not been executed on a phone/emulator for this UI.
+  **No new APK is built or authorized.** The icon and UI are pending a reviewed,
+  newly versioned build; the published 0.9 APK is unchanged.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
@@ -73,6 +76,9 @@ Requested product behavior:
   phone/root details, plausible SoC candidates and unsupported-device limits.
 - Give the app a recognizable launcher icon. The 2026-10-29 source update adds
   an original mint padlock with radio-wave arcs, matching the navy/mint UI.
+- Overhaul UI/navigation and refine UX. The subsequent source update introduces
+  Overview, Bands and Tools, clear observation-versus-preference state, preserved
+  drafts between tabs, a persistent SIM selector and organized recovery tools.
 
 The user asked about combining both SIMs' download speed, then said **leave it**.
 No bonding/multipath feature is planned. They also asked how much of the result
@@ -260,6 +266,67 @@ The next approved build must use a new version code/release identifier rather
 than replacing the existing 0.9 APK/tag. Version fields have not been bumped
 by this source-only artwork task. Preserve the prior signing identity.
 
+### Unreleased UI/navigation overhaul (2026-10-29)
+
+The user then asked to overhaul the UI and navigation and refine UI/UX, rather
+than approving the icon APK build. Both the icon and this redesign remain
+source-only and must ship together in the next explicitly approved build.
+
+`LabLayout.java` now owns a native three-destination interface with an inset-safe
+header, launcher mark, two-button SIM selector, status/progress area and bottom
+navigation. The navy/mint theme is declared in `android/res/values/styles.xml`.
+No Gradle, AndroidX or other runtime dependency was added.
+
+- **Overview:** serving-at-refresh band, Android RAT label, SS-RSRP/SS-SINR,
+  reported cell count, nearby bands, a separate modem-preference card, and
+  expandable full cell details. Unknown values are dashes, not fabricated zeros.
+- **Bands:** read/backup card, a responsive two-to-four-column band grid, bulk
+  selection, staged NR-only/reboot switches, and a selection count/UNAPPLIED
+  summary with the existing one Apply action. The footer remains visible on
+  normal portrait windows and scrolls with the page on short windows.
+- **Tools:** backup import/export, captured-SA restore, explicit boot-plan
+  disable, report copying, device/capability information and network settings.
+  Optional frequency and legacy EFS checks are under an advanced disclosure.
+
+Page views stay allocated when switching tabs, retaining staged choices and
+scroll positions. Tab navigation, SIM selection and switch changes send no
+modem requests. Unapplied choices require confirmation before switching SIMs or
+leaving Overview; Back from another destination returns to Overview. Explicit
+rereads preserve still-selectable draft choices. Activity state saves slot,
+page, scroll and draft values, but requires a fresh modem read before restoring
+choices and re-enabling writes after recreation. Failed Apply also retains
+choices for review after a successful reread; it never retries the write.
+
+`UiPresentation.java` supplies pure host-testable Apply gates, draft comparison,
+radio/mask labels and network summary decisions. Samples age locally every
+15 seconds while the activity is resumed; this issues no modem/network queries.
+Older and undated samples are labeled, cached data warns about other SIMs, and
+neighbors are never promoted to the serving hero. A fresh registered sample is
+preferred to an older stronger sample. Full original observations and mutation
+responses remain in diagnostics.
+
+The app explains Phone/Precise location before requesting observation permissions.
+Operation details can be expanded from the always-visible status, with report
+copying available. Controls reflect busy/disabled states; native accessibility
+checked/selected state, live status announcements, generous touch targets,
+wrapping text, large-font metric stacking and system-bar/cutout insets are used.
+Actual Android rendering, focus order, font scale, rotation and phone gestures
+still need device/emulator validation after build approval.
+
+The root helper, QMI wire protocol, original backup schema, compare/verification/
+rollback behavior and boot transaction classes were not modified. MainActivity's
+view/controller wiring changed; the combined Apply and SA-only Restore command
+arguments and conservative `write_attempted` default were reviewed and preserved.
+
+Validation: Android javac compilation passed, all six resource XML files compiled
+with AAPT2, and five Java host suites passed including `UiPresentationTest`.
+The existing 50 native tests remain prior protocol evidence; they were not rerun
+for this view-only change. `docs/UI.md` describes the navigation and limits.
+`docs/assets/ui-overview.svg` is an **illustrative layout reference with example
+data, not Android screenshots**. Its locally rendered PNG is ignored under
+`build/ui-preview/`. README points to the unreleased UI guide. No new APK, DEX,
+signing or release operation was performed, and the 0.9 APK checksum is unchanged.
+
 ## Latest user-supplied 0.9 evidence
 
 The report supplied after installing the released 0.9 APK contained:
@@ -351,6 +418,8 @@ transport hooks are compiled out of the production ARM64 helper.
 | `PreferenceJournal.java` | Pure Java reconciliation of expected/pending state, immutable original SA/NSA and captured-mode handling |
 | `PreferenceStore.java` | Atomic JSON persistence, device binding, journal adapter and shared process-wide transaction lock |
 | `RadioModeSelection.java` | Resolve NR-only only when Apply is pressed; restore a known earlier mode when leaving NR-only |
+| `LabLayout.java` | Unreleased native Overview/Bands/Tools view hierarchy, navigation, responsive cards/grid and staged-control presentation |
+| `UiPresentation.java` | Unreleased pure Apply/draft/network display decisions, including stale/cached/unknown data handling |
 | `FiveGBands.java` | Render Android serving/unregistered NR observations without inventing detections |
 | `NrFrequencyPlan.java` | Supported-band-constrained frequency candidates, preserving overlaps |
 | `BootPlans.java`, `BootPolicy.java`, `BootReapply.java` | Opt-in per-slot plans, bounded retry policy and testable boot transaction |
@@ -506,6 +575,9 @@ the launcher resources are actually included when the next APK is authorized.
   transport/framing/deadline checks. These run actual helper protocol code.
 - Java host suites passed: `FiveGBandsTest`, `RadioModeSelectionTest`,
   `PreferenceJournalTest`, and `BootReapplyTest`.
+- The UI update adds `UiPresentationTest`; all five host suites pass with the
+  redesigned source. This covers Apply availability, staged changes, mask/mode
+  labels, unknown versus empty observations, cached data and sample aging.
 - Regressions cover post-reboot fresh baseline, original-backup preservation,
   real SA/NSA/mode races refusing SET, refused/uncertain journals, combined
   verification/rollback, boot cancellation and bounded preflight-only retries.
@@ -517,6 +589,9 @@ the launcher resources are actually included when the next APK is authorized.
   resources, build-script syntax, resource references, vector/SVG consistency
   and visual previews. The released 0.9 APK hash is unchanged. Full package
   linking and launcher validation are pending approval for a new APK build.
+- The subsequent UI source check compiles all six XML resources (icons plus
+  theme), compiles the Android Java sources and reviews an illustrative design
+  board. Android runtime/view tests and full APK linking remain pending.
 
 Run relevant checks after changes; do not rerun everything or build an APK just
 because a handoff document changed. Host mock tests may need permission to open
@@ -603,11 +678,12 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-The launcher icon source update is ready for review; **ask whether to build
-the next APK** as the user requested previously. No build is authorized merely
-by the artwork request. Once a build is approved, assign a new version/code,
-verify linked launcher resources and signing compatibility, and follow the
-existing release workflow. Do not overwrite 0.9 or restart NSA development.
+The launcher icon and UI/navigation source updates are ready for review;
+**ask whether to build the next APK** as the user requested previously. No build
+is authorized merely by the artwork or UI request. Once approved, assign a new
+version/code, verify linked launcher/theme resources, native UI rendering and
+navigation on Android, signing compatibility, and follow the existing release
+workflow. Do not overwrite 0.9 or restart NSA development.
 
 If the user wants a reboot reapply test, have them enable **Reapply after
 reboot** before a successful Apply, keep root granted, reboot/unlock, allow
