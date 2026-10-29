@@ -4,7 +4,7 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 jdk="${SA_JAVA_HOME:-${JAVA_HOME:-}}"
 mkdir -p "$here/build/observation-tests"
 sources=(
-    FiveGBands NrFrequencyPlan RadioModeSelection PreferenceJournal BootPolicy BootReapply UiPresentation SpeedTestEngine SpeedTestBands
+    FiveGBands NrFrequencyPlan RadioModeSelection PreferenceJournal BootPolicy BootReapply UiPresentation SpeedTestEngine SpeedTestBands SpeedometerScale
 )
 tests=(FiveGBandsTest RadioModeSelectionTest PreferenceJournalTest BootReapplyTest UiPresentationTest SpeedTestEngineTest)
 inputs=()

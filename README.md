@@ -49,6 +49,18 @@ wait for service before testing. Each confirmed run uses up to **100 MB down +
 leaving the app also stops it. Full instructions, privacy and measurement limits
 are in [the speed-test guide](docs/SPEEDTEST.md).
 
+### Next source update: sustained tests and a clearer screen
+
+The latest source replaces the fixed data cutoff with **20-second Standard or
+60-second Extended tests per direction**, an original live speedometer, separate
+result tiles and compact history entries. Test explanations are expandable.
+Upload responses have more time and requests adapt to the connection; partial
+results retain successful download/ping if upload fails.
+
+**This update is not in the 0.11 APK yet.** Long timed tests may use several GB;
+the app warns before every run. [Preview the new screen](docs/assets/speedtest-overview.svg)
+(illustrative design reference) and see [the current source guide](docs/SPEEDTEST.md).
+
 ### Version 0.9: reboot fix and optional reapply
 
 Version 0.9 fixes an Apply failure after reboot: it uses freshly read

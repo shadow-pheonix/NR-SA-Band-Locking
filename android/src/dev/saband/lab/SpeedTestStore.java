@@ -27,12 +27,19 @@ public final class SpeedTestStore {
     static JSONArray prepend(JSONArray old,JSONObject report) throws JSONException {
         JSONArray out=new JSONArray();out.put(report);for(int i=0;i<old.length()&&i<19;i++)out.put(old.get(i));return out;
     }
+    public static String outcome(JSONObject report) {
+        if(report.optBoolean("cancelled"))return "Stopped";
+        if(report.optBoolean("complete"))return "Complete";
+        if(report.optJSONObject("download")!=null||report.optJSONObject("upload")!=null||
+            report.has("http_latency_ms")&&!report.isNull("http_latency_ms"))return "Partial results";
+        return "Failed";
+    }
     public static String render(JSONArray history,int slot) {
         StringBuilder out=new StringBuilder();for(int i=0;i<history.length();i++) {
             JSONObject r=history.optJSONObject(i);if(r==null||r.optInt("slot",-1)!=slot)continue;
             if(out.length()>0)out.append("\n\n────────\n\n");
             out.append(DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(new Date(r.optLong("started_ms"))))
-                .append(" · SIM ").append(slot+1).append(" · ").append(r.optBoolean("complete")?"Complete":r.optBoolean("cancelled")?"Stopped":"Failed / incomplete")
+                .append(" · SIM ").append(slot+1).append(" · ").append(outcome(r))
                 .append("\nServing bands (sampled): ").append(r.optString("serving_bands_sampled","unknown"))
                 .append("\n↓ ").append(rate(r,"download")).append("   ↑ ").append(rate(r,"upload"))
                 .append("\nPing (HTTP): ").append(r.isNull("http_latency_ms")?"—":String.format(Locale.ROOT,"%.0f ms",r.optDouble("http_latency_ms")))
@@ -44,6 +51,9 @@ public final class SpeedTestStore {
                 if(s.has("observation_error"))out.append(" (cell update unavailable)");
             }
             if(!r.optString("error").isEmpty())out.append("\n").append(r.optString("error"));
+            if(!r.optString("failed_phase").isEmpty())out.append("\nIncomplete phase: ").append(r.optString("failed_phase"));
+            if(r.has("duration_per_direction_s"))out.append("\nTimed test: ").append(r.optInt("duration_per_direction_s")).append("s per direction");
+            if(r.has("upload_acknowledged_bytes"))out.append(String.format(Locale.ROOT,"\nUpload acknowledged: %.1f MB (sent bytes alone do not establish upload speed)",r.optLong("upload_acknowledged_bytes")/1000000.0));
             out.append("\nCloudflare · cellular HTTP average; sampled serving bands may omit aggregated carriers.");
         }
         return out.length()==0?"No tests for this SIM yet. Apply a selection, wait for service, then start a test.":out.toString();

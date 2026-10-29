@@ -9,14 +9,21 @@ import java.util.concurrent.atomic.*;
 /** Bounded HTTP benchmark. The Android adapter supplies a specific cellular Network. */
 public final class SpeedTestEngine {
     public static final String HOST="https://speed.cloudflare.com";
+    public static final int UPLOAD_CHUNK_BYTES=250000;
+    public static final int MAX_UPLOAD_CHUNK_BYTES=4000000,DOWNLOAD_REQUEST_BYTES=25000000;
+    public static final int STANDARD_SECONDS=20,EXTENDED_SECONDS=60,CONNECT_TIMEOUT_MS=10000,RESPONSE_TIMEOUT_MS=15000;
     public interface Connections {HttpURLConnection open(URL url) throws IOException;}
     public interface Guard {void check() throws IOException;}
-    public interface Listener {void phase(String name);void progress(String name,long bytes,long nanos);}
+    public interface Listener {void phase(String name);void progress(String name,long bytes,long nanos);default void latency(double ms) {}}
     public static final class Config {
         final long downloadBytes,uploadBytes,phaseMillis;final int streams;
-        public Config() {this(100000000,20000000,10000,4);}
+        public Config() {this(STANDARD_SECONDS);}
+        public Config(int seconds) {
+            this(Long.MAX_VALUE,Long.MAX_VALUE,seconds*1000L,4);
+            if(seconds!=STANDARD_SECONDS&&seconds!=EXTENDED_SECONDS)throw new IllegalArgumentException("Choose 20 or 60 seconds per direction.");
+        }
         Config(long down,long up,long millis,int streams) {
-            if(down<1||up<1||millis<1||streams<1||streams>4)throw new IllegalArgumentException();
+            if(down<1||up<1||millis<1||millis>60000||streams<1||streams>4)throw new IllegalArgumentException();
             downloadBytes=down;uploadBytes=up;phaseMillis=millis;this.streams=streams;
         }
     }
@@ -27,16 +34,17 @@ public final class SpeedTestEngine {
     }
     public static final class Result {
         public double latencyMs=-1;public Rate download,upload;
-        public long receivedBytes,sentBytes;public String error="";public boolean cancelled;
+        public long receivedBytes,sentBytes,uploadAcknowledgedBytes;
+        public String error="",failedPhase="",errorType="";public boolean cancelled;
         public boolean complete() {return !cancelled&&error.isEmpty()&&download!=null&&upload!=null;}
     }
     private final Connections connections;private final Guard guard;private final Listener listener;private final Config config;
     private final AtomicBoolean cancelled=new AtomicBoolean();
     private final Set<HttpURLConnection> active=Collections.newSetFromMap(new ConcurrentHashMap<HttpURLConnection,Boolean>());
-    private final AtomicLong received=new AtomicLong(),sent=new AtomicLong();
+    private final AtomicLong received=new AtomicLong(),sent=new AtomicLong(),acknowledged=new AtomicLong();
     private final ExecutorService pool=Executors.newFixedThreadPool(4,r -> {Thread t=new Thread(r,"sa-speed-http");t.setDaemon(true);return t;});
     public SpeedTestEngine(Connections c,Guard g,Listener l) {this(c,g,l,new Config());}
-    SpeedTestEngine(Connections c,Guard g,Listener l,Config config) {connections=c;guard=g;listener=l;this.config=config;}
+    public SpeedTestEngine(Connections c,Guard g,Listener l,Config config) {connections=c;guard=g;listener=l;this.config=config;}
     /** Nonblocking; the worker observes this within its polling interval and closes active sockets. */
     public void cancel() {cancelled.set(true);}
     private void check() throws IOException {
@@ -44,7 +52,7 @@ public final class SpeedTestEngine {
         guard.check();
     }
     public Result run() {
-        Result result=new Result();
+        Result result=new Result();String phase="Latency";
         try {
             check();listener.phase("Latency");double[] samples=new double[3];
             for(int i=0;i<samples.length;i++) {
@@ -53,21 +61,24 @@ public final class SpeedTestEngine {
                 try {while(true) {check();try {samples[i]=f.get(100,TimeUnit.MILLISECONDS);break;}catch(TimeoutException e) {if(System.nanoTime()>=deadline)throw new IOException("Latency request timed out.");}}}
                 finally {if(!f.isDone()) {f.cancel(true);disconnect();}}
             }
-            Arrays.sort(samples);result.latencyMs=samples[1];
-            listener.phase("Download");result.download=transfer(false,config.downloadBytes);
-            check();listener.phase("Upload");result.upload=transfer(true,config.uploadBytes);
+            Arrays.sort(samples);result.latencyMs=samples[1];listener.latency(result.latencyMs);
+            phase="Download";listener.phase(phase);result.download=transfer(false,config.downloadBytes);
+            check();phase="Upload";listener.phase(phase);result.upload=transfer(true,config.uploadBytes);
             check();
         } catch(Exception e) {
             Throwable cause=e instanceof ExecutionException&&e.getCause()!=null?e.getCause():e;
-            result.cancelled=cancelled.get();result.error=result.cancelled?"Stopped; incomplete results.":cause.getMessage()==null?cause.getClass().getSimpleName():cause.getMessage();
+            result.failedPhase=phase;result.errorType=cause.getClass().getSimpleName();result.cancelled=cancelled.get();
+            String detail=cause.getMessage()==null?cause.getClass().getSimpleName():cause.getMessage();
+            result.error=result.cancelled?"Stopped; incomplete results.":cause instanceof SocketTimeoutException?
+                phase+" request timed out. Completed measurements are saved.":phase+" failed: "+detail;
         } finally {
-            disconnect();pool.shutdownNow();result.receivedBytes=received.get();result.sentBytes=sent.get();
+            disconnect();pool.shutdownNow();result.receivedBytes=received.get();result.sentBytes=sent.get();result.uploadAcknowledgedBytes=acknowledged.get();
         }
         return result;
     }
-    private HttpURLConnection open(String path) throws IOException {
+    private HttpURLConnection open(String path,int readTimeout) throws IOException {
         check();HttpURLConnection c=connections.open(new URL(HOST+path));active.add(c);
-        c.setConnectTimeout(3000);c.setReadTimeout(3000);c.setInstanceFollowRedirects(false);c.setUseCaches(false);
+        c.setConnectTimeout(Math.min(CONNECT_TIMEOUT_MS,readTimeout));c.setReadTimeout(readTimeout);c.setInstanceFollowRedirects(false);c.setUseCaches(false);
         c.setRequestProperty("Cache-Control","no-cache, no-store");c.setRequestProperty("Accept-Encoding","identity");
         c.setRequestProperty("User-Agent","SA-Band-Lab");return c;
     }
@@ -78,7 +89,7 @@ public final class SpeedTestEngine {
         String encoding=c.getContentEncoding();if(encoding!=null&&!encoding.equalsIgnoreCase("identity"))throw new IOException("Unexpected compressed test response.");
     }
     private double latency() throws IOException {
-        HttpURLConnection c=open("/__down?bytes=0&nonce="+UUID.randomUUID());
+        HttpURLConnection c=open("/__down?bytes=0&nonce="+UUID.randomUUID(),3000);
         try {long start=System.nanoTime();status(c);return (System.nanoTime()-start)/1000000.0;}
         finally {release(c);}
     }
@@ -109,32 +120,40 @@ public final class SpeedTestEngine {
         return new Rate(measuredBytes,Math.max(1,finished-start),measuredBytes>=budget);
     }
     private boolean running(long deadline,AtomicBoolean stop) throws IOException {check();return !stop.get()&&System.nanoTime()<deadline;}
+    private int responseTimeout() {return (int)Math.min(RESPONSE_TIMEOUT_MS,config.phaseMillis);}
     private void download(long quota,long deadline,AtomicBoolean stop,AtomicLong completed) throws IOException {
-        if(quota==0)return;HttpURLConnection c=open("/__down?bytes="+quota+"&nonce="+UUID.randomUUID());
-        try {
-            status(c);long declared=c.getContentLengthLong();if(declared>=0&&declared!=quota)throw new IOException("Unexpected download size.");
-            String type=c.getContentType();if(type!=null&&(type.contains("text/html")||type.contains("application/json")))throw new IOException("Speed endpoint returned a page instead of test data.");
-            try(InputStream in=c.getInputStream()) {
-                byte[] buffer=new byte[65536];long count=0;
-                while(count<quota&&running(deadline,stop)) {
-                    int n=in.read(buffer,0,(int)Math.min(buffer.length,quota-count));
-                    if(n<0)throw new IOException("Truncated speed-test download.");
-                    count+=n;received.addAndGet(n);if(running(deadline,stop))completed.addAndGet(n);
+        byte[] buffer=new byte[65536];long count=0;
+        while(count<quota&&running(deadline,stop)) {
+            long request=Math.min(DOWNLOAD_REQUEST_BYTES,quota-count);
+            HttpURLConnection c=open("/__down?bytes="+request+"&nonce="+UUID.randomUUID(),responseTimeout());
+            try {
+                status(c);long declared=c.getContentLengthLong();if(declared>=0&&declared!=request)throw new IOException("Unexpected download size.");
+                String type=c.getContentType();if(type!=null&&(type.contains("text/html")||type.contains("application/json")))throw new IOException("Speed endpoint returned a page instead of test data.");
+                try(InputStream in=c.getInputStream()) {
+                    long part=0;
+                    while(part<request&&running(deadline,stop)) {
+                        int n=in.read(buffer,0,(int)Math.min(buffer.length,request-part));
+                        if(n<0)throw new IOException("Truncated speed-test download.");
+                        part+=n;count+=n;received.addAndGet(n);if(running(deadline,stop))completed.addAndGet(n);
+                    }
                 }
-            }
-        } catch(IOException e) {if(!stop.get()&&System.nanoTime()<deadline)throw e;}
-        finally {release(c);}
+            } catch(IOException e) {if(!stop.get()&&System.nanoTime()<deadline)throw e;else return;}
+            finally {release(c);}
+        }
     }
     private void upload(long quota,long deadline,AtomicBoolean stop,AtomicLong completed) throws IOException {
-        byte[] buffer=new byte[32768];new Random().nextBytes(buffer);long count=0;
+        byte[] buffer=new byte[32768];new Random().nextBytes(buffer);long count=0;int nextChunk=UPLOAD_CHUNK_BYTES;
         while(count<quota&&running(deadline,stop)) {
-            int chunk=(int)Math.min(1000000,quota-count);HttpURLConnection c=open("/__up");
+            int chunk=(int)Math.min(nextChunk,quota-count);HttpURLConnection c=open("/__up",responseTimeout());long requestStart=System.nanoTime();
             try {
                 c.setRequestMethod("POST");c.setDoOutput(true);c.setRequestProperty("Content-Type","application/octet-stream");c.setFixedLengthStreamingMode(chunk);
                 try(OutputStream out=c.getOutputStream()) {int n=0;while(n<chunk) {if(!running(deadline,stop))return;int take=Math.min(buffer.length,chunk-n);out.write(buffer,0,take);sent.addAndGet(take);n+=take;}}
                 status(c);
                 try(InputStream in=c.getInputStream()) {int total=0,n;while((n=in.read(buffer,0,Math.min(buffer.length,4097-total)))!=-1) {total+=n;if(total>4096)throw new IOException("Unexpected upload response size.");}}
-                if(running(deadline,stop))completed.addAndGet(chunk);count+=chunk;
+                acknowledged.addAndGet(chunk);if(running(deadline,stop))completed.addAndGet(chunk);count+=chunk;
+                long elapsed=System.nanoTime()-requestStart;
+                if(elapsed<500000000L)nextChunk=Math.min(MAX_UPLOAD_CHUNK_BYTES,nextChunk*2);
+                else if(elapsed>1000000000L)nextChunk=Math.max(62500,nextChunk/2);
             } catch(IOException e) {if(!stop.get()&&System.nanoTime()<deadline)throw e;else return;}
             finally {release(c);}
         }

@@ -5,6 +5,11 @@ Version **0.11** adds **Speedtest between Bands and Tools**. Android rendering a
 phone testing. Install official APK updates over the previous app to retain
 backups.
 
+The follow-up **unreleased source** adds a native speedometer, three result tiles,
+a duration selector, collapsed explanations and compact tap-to-open reports.
+[Speedtest preview](assets/speedtest-overview.svg) is illustrative, not an Android
+screenshot. Full source behavior is described in [SPEEDTEST.md](SPEEDTEST.md).
+
 ![UI design reference](assets/ui-overview.svg)
 
 The image illustrates the earlier 0.10 three-tab layout with example data, **not Android
@@ -49,8 +54,11 @@ root/network operations. Back from Bands or Tools returns to Overview.
 ## Speedtest and history
 
 See [SPEEDTEST.md](SPEEDTEST.md) for the beginner flow and measurement details.
-The source adds a four-stream cellular benchmark, explicit data-use confirmation,
-a Stop action and bounded local history. Unapplied band choices block testing.
+The source adds a timed 20s/60s four-stream cellular benchmark, explicit data-use confirmation,
+a Stop action, measured-average dial, result tiles and compact local history.
+Successful prior phases remain visible as Partial results after an upload failure.
+Long timed tests have no fixed MB cutoff and may consume several GB; the
+confirmation and expandable details explain this. Unapplied band choices block testing.
 The selected SIM must be both the default and active data SIM; each HTTP request
 is pinned to the same cellular Network. Route/SIM changes fail the run.
 Results are labeled incomplete when cancelled or failed, retaining any completed

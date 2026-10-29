@@ -27,6 +27,14 @@ public final class SpeedTestReportsTest {
         check(history.getJSONObject(19).getString("serving_bands_sampled").equals("n11"));
         check(first.getString("serving_bands_sampled").equals("n78"));
         check(SpeedTestStore.render(new JSONArray(),0).contains("No tests"));
+        JSONObject partial=report(0,"n78","not read");partial.put("complete",false);partial.put("upload",JSONObject.NULL);
+        partial.put("error","timeout");partial.put("failed_phase","Upload");partial.put("duration_per_direction_s",60);partial.put("upload_acknowledged_bytes",0);
+        shown=SpeedTestStore.render(new JSONArray().put(partial),0);
+        check(SpeedTestStore.outcome(partial).equals("Partial results")&&shown.contains("Partial results"));
+        check(shown.contains("450.3 Mbps")&&shown.contains("Ping (HTTP): 35 ms")&&shown.contains("Incomplete phase: Upload")&&shown.contains("60s per direction"));
+        check(!shown.contains("↑ 0.0")&&shown.contains("Upload acknowledged: 0.0 MB"));
+        check(SpeedTestStore.outcome(new JSONObject()).equals("Failed"));
+        check(SpeedTestStore.outcome(new JSONObject().put("cancelled",true).put("complete",true)).equals("Stopped"));
         System.out.println("Speed history checks passed: serving versus selected bands, roundtrip, download/upload/ping, samples, missing values, SIM filtering, short runs and latest-20 retention.");
     }
 }

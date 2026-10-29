@@ -24,28 +24,32 @@ history. Never publish credentials or private device identifiers here.
   as an experimental prerelease. Previous releases remain unchanged.
 - Public release: [v0.11.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.11.0).
 - [0.11 APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.11.0/sa-band-lab-0.11-arm64.apk).
-- **Latest phone report confirms combined manual Apply of n78-only SA and
-  NR-only mode, with successful modem readback.** It also confirms that the
-  post-reboot stale-snapshot bug no longer blocks that operation.
+- **Latest modem mutation evidence remains the 0.9 phone report:** combined
+  n78-only SA + NR-only Apply and modem readback succeeded, including the
+  post-reboot fresh-baseline fix. The newer 0.11 report is a speed test only.
 - **Automatic reboot reapply has not been phone-tested.** The latest report has
   `reapply_after_reboot_enabled: false`; it contains no boot reapply evidence.
-- Android previously reported a serving n78 cell, but the latest 0.9 report
-  says serving observations have not been refreshed. Do not claim fresh live
-  registration or universal RF enforcement from preference readback alone.
+- The latest 0.11 speed report contains fresh registered n78 observations at
+  all four phase boundaries and Android data RAT NR. This establishes sampled
+  serving observations for that run, not continuous RF enforcement or a lock.
 - Neighbor-band discovery remains unresolved. Android returned serving cells
   only; the experimental QMI frequency query is rejected by this firmware.
-- Latest request: **add an in-app speed test**, with a dedicated **Speedtest**
-  tab between Bands and Tools. Every report must record the serving band during
-  the speed test. Work in progress: cellular-only test on the chosen data SIM,
-  download/upload/HTTP latency, cancellable foreground run and local comparison
-  history with timestamped fresh serving observations and explicit unknowns.
-  Source implemented; Android compilation, six Java suites and report/history
-  checks pass, plus a tiny live endpoint check. Phone validation is pending.
-  The user explicitly requested “Build the apk”. Version 0.11 is now built
-  with the existing signing identity. Seven Java/report suites and 50 native
-  tests pass. Package/version, permissions, resources and certificate verified.
-  APK/checksum published; anonymous public download matches the signed bytes.
-  README links to 0.11. No phone/emulator speed or serving-cell test is claimed.
+- Latest user report: **0.11 speed test showed failed**. Phone completed a
+  100 MB download at about 266 Mbps and HTTP latency about 79 ms, with fresh
+  registered n78 samples at all four phase boundaries. Upload sent about 6 MB
+  before a timeout roughly 3s into the phase; upload rate absent. This confirms
+  phone download/latency and serving sampling on that run, not a complete test
+  or any band Apply (the report contains no root preference read).
+- Follow-up source now implements: response timeouts up to 15s within a bounded
+  timed phase, smaller adaptive upload chunks and explicit **Partial results**
+  with failing phase/type and acknowledged upload bytes. User then requested
+  longer tests without fixed data limits: **20s or extended 60s per direction**,
+  confirmed data-use warning (potentially several GB), repeating download requests
+  and adaptive uploads. They also supplied a congested-screen screenshot and
+  requested a speedometer. New native animated meter, result tiles, collapsed
+  explanations and compact expandable history are implemented. Seven Java/report
+  suites and Android source compilation pass; illustrative meter reference reviewed;
+  no new APK is authorized for these follow-ups. 0.11 stays public.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
@@ -421,6 +425,7 @@ transport hooks are compiled out of the production ARM64 helper.
 | `PreferenceStore.java` | Atomic JSON persistence, device binding, journal adapter and shared process-wide transaction lock |
 | `RadioModeSelection.java` | Resolve NR-only only when Apply is pressed; restore a known earlier mode when leaving NR-only |
 | `LabLayout.java` | Native Overview/Bands/Speedtest/Tools view hierarchy, navigation, responsive cards/grid and staged-control presentation |
+| `SpeedometerView.java`, `SpeedometerScale.java` | Unreleased native animated measured-average dial and host-tested scale |
 | `UiPresentation.java` | Pure Apply/draft/network display decisions, including stale/cached/unknown data handling |
 | `FiveGBands.java` | Render Android serving/unregistered NR observations without inventing detections |
 | `NrFrequencyPlan.java` | Supported-band-constrained frequency candidates, preserving overlaps |
@@ -590,6 +595,62 @@ explicit build request authorizes packaging them in 0.11.
 - JVM JSON test jar is existing workspace org.json 20240303, not bundled; run
   `tests/test_speed_reports.sh` with SA_ANDROID_JAR and SA_JSON_JAR. Detailed
   method, privacy, limitations and primary sources: [docs/SPEEDTEST.md](docs/SPEEDTEST.md).
+
+## 0.11 phone feedback and follow-up source (2026-10-29, unreleased)
+
+User reported a failed speed test, then requested longer time-based tests and a
+less congested Speedtest screen with a meter like a conventional speed-test app.
+
+Evidence from that report: 100,000,000 download bytes in about 3.007s, roughly
+266 Mbps, median HTTP response latency about 79 ms. All four fresh registered
+serving samples were n78 with Android RAT NR. Upload sent about 6 MB, then timed
+out roughly 3s into the phase; upload rate is null, complete false, cancelled
+false. No root preference read or Apply occurred in that report. No raw private
+report, timestamps, subscriber identity or device binding is committed here.
+
+Cause assessment: source uses a 3s socket read timeout and four concurrent 1 MB
+upload requests. Failure timing matches that timeout, but the report does not
+identify whether DNS/connect/response/server/network caused the delay. It is not
+evidence that Cloudflare/Jio universally blocks uploads. Sent bytes do not prove
+acknowledged upload speed. The failed label hid useful successful download/ping.
+
+Follow-up implementation:
+
+- Time-driven public Config: 20s Standard or 60s Extended **per direction**,
+  four streams and no fixed payload cutoff. Download repeats at most 25 MB per
+  request until the phase deadline. Upload starts at 250 KB, grows up to 4 MB
+  for fast acknowledgements and shrinks to 62.5 KB for slow ones. No payload-sized
+  memory allocation. Internal finite budgets remain only for host test fixtures.
+- Response timeout up to 15s (shorter for shorter test fixtures), with phase
+  controller enforcing deadline and Stop. Transfer connection timeout is now
+  up to 10s; short latency probes keep their 3s timeout.
+  No silent retry of failed payloads or switch to another test service.
+- Partial download/ping retained, shared Complete / Partial results / Stopped /
+  Failed state in banner/history, failed_phase/error_type, acknowledged upload
+  bytes and chosen duration in reports. Historical 0.11 reports remain readable.
+- Native original SpeedometerView uses actual live phase averages, a smooth
+  arc/pointer and numerical Mbps, not simulated speed or copied Ookla artwork.
+  SpeedometerScale supplies a monotonic logarithmic 0–5000 dial; the number is
+  not clamped at the dial maximum. Accessibility description exposes phase/value.
+- Screen focuses on the meter, elapsed time/data amount, duration selector,
+  Start/Stop and three download/upload/HTTP-ping tiles. Explanations/provider
+  link are collapsed. Recent results initially show three compact entries,
+  expandable older history and tap-to-open/copy individual full reports.
+- The app remembers the last chosen duration, disables changes while testing,
+  and keeps the screen awake only while an in-app run is active. Backgrounding/
+  rotation still requests stop. Empty/different-SIM histories reset the meter.
+- Data warning updated everywhere for current source: no fixed MB cutoff; at
+  1 Gbps, 20s is about 2.5 GB and 60s about 7.5 GB **per direction**, plus overhead.
+  Confirmation before each run; server sees IP/generated traffic, not reports.
+- Modem protocol, backup journal, boot plans and original backups unchanged.
+  Location-disabled-only settings prompt and serving-band sampling retained.
+- Checks passed: Android javac, existing six Java suites plus report/history
+  tests, new slow upload response (>3s), timeout partials, no-ack handling, repeated
+  transfers exceeding the old 100/20 MB cutoffs, bounded cancellation and meter
+  scale checks. The design reference is docs/assets/speedtest-overview.svg
+  (illustrative, not an Android screenshot). Phone runtime/accuracy checks
+  remain pending. Reviewed a rendered SVG design reference; it is not Android
+  rendering evidence. No new APK, DEX, signing or release operation is authorized.
 
 ## Approved 0.11 build checkpoint (2026-10-29)
 
@@ -800,13 +861,13 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-The approved 0.11 APK is built, signed, verified and published, including a
-matching anonymous public download and updated README link. Next, test Speedtest
-on the phone: chosen data SIM with Wi-Fi/VPN off, Location enabled, Phone/Precise
-location granted, applied bands and usable service. Inspect speed history for
-serving samples, rates, HTTP ping and timestamps; test Stop and Location prompts
-with the switch both on and off. No such real-device test has happened here.
-Future changes need a new explicit build approval.
+The 0.11 APK remains public and unchanged. Follow-up source now fixes the short
+upload response window, adds partial results, timed Standard/Extended runs and
+the less congested meter screen. Source checks and review are complete; ask
+before building a new APK as the user requested. Do not treat 0.11 build approval
+as approval of these subsequent fixes and UI changes. Phone validation remains
+needed for the timed engine, upload, dial, history dialogs and duration/data-use
+flow; the supplied partial 0.11 run is the latest device evidence.
 
 The approved 0.10 build/release is complete and the public APK download verified.
 Next, test native rendering/navigation, launcher appearance, font scale and

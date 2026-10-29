@@ -13,15 +13,27 @@ public final class SpeedTestEngineTest {
         public void phase(String p) {}public void progress(String p,long b,long n) {}
     };
     private static final class Endpoint implements SpeedTestEngine.Connections {
-        volatile boolean failDownload,failUpload,truncated,compressed,html;
-        volatile long delayMillis;final AtomicLong sent=new AtomicLong(),received=new AtomicLong();
+        volatile boolean failDownload,failUpload,truncated,compressed,html,timeoutUpload;
+        volatile long delayMillis,uploadResponseMillis;final AtomicLong sent=new AtomicLong(),received=new AtomicLong(),largestUpload=new AtomicLong();
+        final AtomicInteger downloadRequests=new AtomicInteger();final CountDownLatch uploading=new CountDownLatch(1);
         final CountDownLatch downloading=new CountDownLatch(1);
         public HttpURLConnection open(URL url) {
             return new HttpURLConnection(url) {
                 volatile boolean disconnected;
                 final boolean upload=url.getPath().equals("/__up");
                 final long size=upload?0:Long.parseLong(url.getQuery().split("&")[0].substring(6));
-                @Override public int getResponseCode() {return upload?(failUpload?503:200):size>0&&failDownload?503:200;}
+                @Override public int getResponseCode() throws IOException {
+                    if(upload) {
+                        uploading.countDown();
+                        if(timeoutUpload||uploadResponseMillis>getReadTimeout())throw new SocketTimeoutException("mock response timeout");
+                        long until=System.nanoTime()+TimeUnit.MILLISECONDS.toNanos(uploadResponseMillis);
+                        while(System.nanoTime()<until) {
+                            if(disconnected)throw new IOException("Disconnected");
+                            try {Thread.sleep(10);}catch(InterruptedException e) {throw new InterruptedIOException();}
+                        }
+                    } else if(size>0)downloadRequests.incrementAndGet();
+                    return upload?(failUpload?503:200):size>0&&failDownload?503:200;
+                }
                 @Override public String getContentEncoding() {return compressed&&size>0?"gzip":null;}
                 @Override public String getContentType() {return html&&size>0?"text/html":"application/octet-stream";}
                 @Override public long getContentLengthLong() {return size;}
@@ -38,7 +50,7 @@ public final class SpeedTestEngineTest {
                     };
                 }
                 @Override public OutputStream getOutputStream() {
-                    check(getRequestMethod().equals("POST"));check(fixedContentLength>0);return new OutputStream() {
+                    check(getRequestMethod().equals("POST"));check(fixedContentLength>0);largestUpload.accumulateAndGet(fixedContentLength,Math::max);return new OutputStream() {
                         public void write(int b) {sent.incrementAndGet();}
                         public void write(byte[] b,int off,int len) throws IOException {if(disconnected)throw new IOException("Disconnected");sent.addAndGet(len);}
                     };
@@ -60,6 +72,24 @@ public final class SpeedTestEngineTest {
         }
         e=new Endpoint();e.failUpload=true;SpeedTestEngine.Result partial=engine(e).run();
         check(!partial.complete()&&partial.download!=null&&partial.upload==null&&partial.sentBytes<=20003);
+        check(partial.failedPhase.equals("Upload")&&partial.error.contains("HTTP 503"));
+        e=new Endpoint();e.timeoutUpload=true;SpeedTestEngine.Result timeout=engine(e).run();
+        check(timeout.download!=null&&timeout.latencyMs>=0&&timeout.upload==null&&!timeout.cancelled);
+        check(timeout.failedPhase.equals("Upload")&&timeout.errorType.equals("SocketTimeoutException")&&timeout.error.contains("Upload request timed out"));
+        check(timeout.uploadAcknowledgedBytes==0); // Sent bytes are not an upload-speed result.
+        e=new Endpoint();e.uploadResponseMillis=3200;
+        SpeedTestEngine.Result slowResponse=new SpeedTestEngine(e,() -> {},QUIET,new SpeedTestEngine.Config(1000,40000,5000,4)).run();
+        check(slowResponse.complete()&&slowResponse.upload.bytes==40000&&slowResponse.uploadAcknowledgedBytes==40000);
+        SpeedTestEngine.Config standard=new SpeedTestEngine.Config(),extended=new SpeedTestEngine.Config(60);
+        check(standard.phaseMillis==20000&&extended.phaseMillis==60000);
+        check(standard.downloadBytes==Long.MAX_VALUE&&extended.uploadBytes==Long.MAX_VALUE);
+        boolean rejected=false;try {new SpeedTestEngine.Config(0);}catch(IllegalArgumentException ex) {rejected=true;}check(rejected);
+        e=new Endpoint();SpeedTestEngine.Config timed=new SpeedTestEngine.Config(Long.MAX_VALUE,Long.MAX_VALUE,600,4);
+        SpeedTestEngine.Result sustained=new SpeedTestEngine(e,() -> {},QUIET,timed).run();
+        check(sustained.complete()&&sustained.download.bytes>100000000&&sustained.upload.bytes>20000000);
+        check(sustained.download.nanos>=600000000L&&sustained.upload.nanos>=600000000L);
+        check(!sustained.download.capped&&!sustained.upload.capped&&e.downloadRequests.get()>4);
+        check(e.largestUpload.get()>SpeedTestEngine.UPLOAD_CHUNK_BYTES&&e.largestUpload.get()<=SpeedTestEngine.MAX_UPLOAD_CHUNK_BYTES);
         e=new Endpoint();e.delayMillis=20;
         SpeedTestEngine.Result bounded=new SpeedTestEngine(e,() -> {},QUIET,new SpeedTestEngine.Config(1000000,1000,65,1)).run();
         check(bounded.complete()&&bounded.download.bytes>0&&bounded.download.bytes<1000000&&!bounded.download.capped);
@@ -67,6 +97,11 @@ public final class SpeedTestEngineTest {
         ExecutorService executor=Executors.newSingleThreadExecutor();Future<SpeedTestEngine.Result> future=executor.submit(() -> cancelEngine.run());
         check(cancelling.downloading.await(2,TimeUnit.SECONDS));cancelEngine.cancel();SpeedTestEngine.Result stopped=future.get(2,TimeUnit.SECONDS);executor.shutdownNow();
         check(stopped.cancelled&&!stopped.complete()&&stopped.upload==null);
+        e=new Endpoint();e.uploadResponseMillis=10000;final Endpoint stalled=e;
+        final SpeedTestEngine stopUpload=new SpeedTestEngine(e,() -> {},QUIET,new SpeedTestEngine.Config(1000,40000,15000,4));
+        executor=Executors.newSingleThreadExecutor();future=executor.submit(() -> stopUpload.run());check(stalled.uploading.await(2,TimeUnit.SECONDS));
+        stopUpload.cancel();SpeedTestEngine.Result cancelledUpload=future.get(2,TimeUnit.SECONDS);executor.shutdownNow();
+        check(cancelledUpload.cancelled&&cancelledUpload.download!=null&&cancelledUpload.upload==null);
         e=new Endpoint();SpeedTestEngine preCancelled=engine(e);preCancelled.cancel();check(preCancelled.run().cancelled&&e.received.get()==0);
         e=new Endpoint();AtomicInteger guards=new AtomicInteger();
         SpeedTestEngine lost=new SpeedTestEngine(e,() -> {if(guards.incrementAndGet()>5)throw new IOException("SIM changed");},QUIET,new SpeedTestEngine.Config(100000,10000,1000,1));
@@ -78,6 +113,9 @@ public final class SpeedTestEngineTest {
         check(SpeedTestBands.summary(Arrays.asList(new int[]{78},new int[]{28},new int[0])).equals("n28, n78 · bands changed between samples · some samples unknown"));
         check(SpeedTestBands.summary(Collections.emptyList()).equals("unknown"));
         check(SpeedTestBands.summary(Arrays.asList(new int[]{78},new int[]{78})).equals("n78"));
+        check(SpeedometerScale.fraction(0)==0&&SpeedometerScale.fraction(-5)==0&&SpeedometerScale.fraction(Double.NaN)==0);
+        check(SpeedometerScale.fraction(5000)==1&&SpeedometerScale.fraction(20000)==1);
+        check(SpeedometerScale.fraction(266)>SpeedometerScale.fraction(100)&&SpeedometerScale.fraction(100)>SpeedometerScale.fraction(10));
         System.out.println("Speed tests passed: byte budgets, parallel transfers, Mbps, status/encoding/truncation, acknowledged uploads, deadlines, stop/route errors, fresh serving-only band samples and unknowns.");
     }
 }

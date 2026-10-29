@@ -10,6 +10,8 @@ import android.text.style.*;
 import android.view.*;
 import android.widget.*;
 import java.util.ArrayList;
+import java.util.Locale;
+import org.json.*;
 
 /** Native navigation shell. Views survive tab changes; no modem calls here. */
 public final class LabLayout {
@@ -30,6 +32,11 @@ public final class LabLayout {
     public final Switch nrOnly,persistLock;
     public final Button startSpeed,stopSpeed,copySpeed,clearSpeed;
     public final TextView speedStatus,speedHistory;
+    public final Spinner speedDuration;
+    public final SpeedometerView speedometer;
+    public final TextView speedDownload,speedUpload,speedPing,speedElapsed,speedServing;
+    private final LinearLayout speedHistoryCards;
+    private boolean showOlderSpeedTests;
     private final FrameLayout pages;
     private final View[] destinations=new View[UiPresentation.PAGE_COUNT];private final ScrollView[] scrolls=new ScrollView[UiPresentation.PAGE_COUNT];
     private final LinearLayout[] navigation=new LinearLayout[UiPresentation.PAGE_COUNT];private final TextView[] navLabels=new TextView[UiPresentation.PAGE_COUNT];private final Glyph[] navIcons=new Glyph[UiPresentation.PAGE_COUNT];
@@ -108,23 +115,35 @@ public final class LabLayout {
         apply=button(footer,"Apply SA bands until reboot",true,callbacks::apply);
         if(activity.getResources().getConfiguration().screenHeightDp<540)bandContent.addView(footer);else bandsPage.addView(footer);
 
-        LinearLayout speed=scrollPage(UiPresentation.SPEED);heading(speed,"Speedtest","Apply a selection, then compare mobile-data performance.");
-        LinearLayout test=card(speed);eyebrow(test,"CELLULAR SPEED TEST");
-        speedStatus=text(test,"Ready when you are",22,INK,true);speedStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
-        text(test,"Download · Upload · Ping (HTTP)\nUses the selected mobile-data SIM. Turn Wi-Fi and VPN off. Apply or discard pending choices first.",13,MUTED,false);
-        text(test,"Up to 100 MB download + 20 MB upload payload per run, plus protocol overhead. About 30–60 seconds; slow requests can take longer. Cloudflare receives your IP address and test traffic. Band observations and reports stay on this phone.",12,MUTED,false);
-        navigationButton(test,"About the test provider",() -> {
+        LinearLayout speed=scrollPage(UiPresentation.SPEED);heading(speed,"Speedtest","Measure your current connection.");
+        LinearLayout test=card(speed);
+        speedStatus=text(test,"Ready to test",14,MINT,true);speedStatus.setGravity(Gravity.CENTER);speedStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        speedometer=new SpeedometerView(activity);test.addView(speedometer,new LinearLayout.LayoutParams(-1,-2));
+        speedElapsed=text(test,"Choose a duration and start",12,MUTED,false);speedElapsed.setGravity(Gravity.CENTER);
+        speedServing=text(test,"SIM 1 · mobile data · Cloudflare",12,MUTED,false);speedServing.setGravity(Gravity.CENTER);speedServing.setPadding(0,dp(6),0,dp(10));
+        text(test,"Duration per direction",12,MUTED,false);
+        speedDuration=new Spinner(activity);ArrayAdapter<String> durations=new ArrayAdapter<>(activity,android.R.layout.simple_spinner_dropdown_item,new String[]{"20 seconds · Standard","60 seconds · Extended"});
+        speedDuration.setAdapter(durations);speedDuration.setMinimumHeight(dp(48));speedDuration.setContentDescription("Speed test duration per direction");test.addView(speedDuration,new LinearLayout.LayoutParams(-1,-2));
+        startSpeed=button(test,"Start speed test",true,callbacks::startSpeed);
+        stopSpeed=baseButton("Stop test",false);stopSpeed.setOnClickListener(v -> callbacks.stopSpeed());test.addView(stopSpeed,buttonParams());stopSpeed.setVisibility(View.GONE);
+        text(test,"Uses mobile data. Longer tests can use several GB.",11,MUTED,false).setPadding(0,dp(8),0,0);
+        LinearLayout speedMetrics=row();if(activity.getResources().getConfiguration().fontScale>1.4f)speedMetrics.setOrientation(LinearLayout.VERTICAL);
+        speedDownload=metric(speedMetrics,"DOWNLOAD","Mbps",true);speedUpload=metric(speedMetrics,"UPLOAD","Mbps",true);speedPing=metric(speedMetrics,"PING · HTTP","ms",false);margin(speed,speedMetrics,0,0,0,14);
+        speedDownload.setTextSize(19);speedUpload.setTextSize(19);speedPing.setTextSize(19);
+        LinearLayout information=card(speed),informationContents=column();
+        text(informationContents,"Use the selected mobile-data SIM with Wi-Fi/VPN off. Apply or discard pending band choices first. Location and Phone/Precise location permissions let Android report the serving band.",13,MUTED,false);
+        text(informationContents,"Standard tests run 20 seconds per direction; Extended runs 60 seconds each. No fixed MB cutoff. At 1 Gbps, 20s is about 2.5 GB per direction; 60s is about 7.5 GB, plus overhead. Stop or leaving the app ends a run.",13,MUTED,false).setPadding(0,dp(10),0,dp(10));
+        text(informationContents,"Cloudflare receives your IP address and generated test traffic. Reports and cell observations stay local. Serving bands are sampled at phase boundaries and may be unknown. The meter shows the measured phase average; Ping is HTTP response latency.",13,MUTED,false);
+        navigationButton(informationContents,"About the test provider",() -> {
             try {activity.startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse("https://speed.cloudflare.com/about")));}
             catch(Exception e) {Toast.makeText(activity,"Open speed.cloudflare.com/about in a browser.",Toast.LENGTH_LONG).show();}
         });
-        startSpeed=button(test,"Start speed test",true,callbacks::startSpeed);
-        stopSpeed=baseButton("Stop test",false);stopSpeed.setOnClickListener(v -> callbacks.stopSpeed());test.addView(stopSpeed,buttonParams());stopSpeed.setVisibility(View.GONE);
-        text(test,"Serving bands are sampled during the test. If Location, permissions or fresh modem observations are unavailable, reports say unknown. Sampling does not prove the band stayed unchanged between observations.",12,MUTED,false);
-        LinearLayout history=card(speed);eyebrow(history,"COMPARE RECENT TESTS");
-        text(history,"Last 20 runs, stored locally. Only this SIM's runs appear here. Repeat tests in the same place; traffic load and radio conditions can change the result.",12,MUTED,false);
-        speedHistory=text(history,"No tests yet.",14,INK,false);speedHistory.setTextIsSelectable(true);
-        copySpeed=button(history,"Copy speed test reports",false,callbacks::copySpeed);
-        clearSpeed=button(history,"Clear all speed test history",false,callbacks::clearSpeed);
+        information.addView(informationContents);fold(information,"Test details & data use",informationContents,false);
+        LinearLayout history=card(speed);eyebrow(history,"RECENT RESULTS");
+        speedHistory=text(history,"No tests yet.",13,MUTED,false);speedHistory.setTextIsSelectable(true);
+        speedHistoryCards=column();history.addView(speedHistoryCards);
+        copySpeed=button(history,"Copy reports",false,callbacks::copySpeed);
+        clearSpeed=button(history,"Clear history",false,callbacks::clearSpeed);
 
         LinearLayout tools=scrollPage(UiPresentation.TOOLS);heading(tools,"Tools & recovery","Keep your backup. Find details when you need them.");
         LinearLayout backups=card(tools);eyebrow(backups,"YOUR BACKUP");backupValue=text(backups,"No backup loaded",18,INK,true);
@@ -173,6 +192,7 @@ public final class LabLayout {
         destinations[page].setAccessibilityPaneTitle(UiPresentation.pageTitle(page));
     }
     public void setSlot(int slot) {
+        speedServing.setText("SIM "+(slot+1)+" · mobile data · Cloudflare");
         for(int i=0;i<2;i++) {sims[i].setSelected(i==slot);sims[i].setTextColor(i==slot?BG:MUTED);sims[i].setBackground(shape(i==slot?MINT:Color.TRANSPARENT,12,Color.TRANSPARENT));}
     }
     public void setBusy(boolean busy) {progress.setVisibility(busy?View.VISIBLE:View.GONE);for(Button sim:sims)sim.setEnabled(!busy);}
@@ -189,6 +209,56 @@ public final class LabLayout {
     public void showDraft(int count,boolean dirty,boolean ready,boolean nr,boolean reboot) {
         update(selectionTitle,ready?UiPresentation.selected(count):"Read preferences first");update(draftLabel,ready&&dirty?"UNAPPLIED":"");
         update(selectionHint,ready?(nr?"5G only":"Keep or restore fallback")+" · "+(reboot?"Reapply after reboot":"Until reboot"):"Nothing changes until you press Apply.");
+    }
+    public void speedPhase(String phase) {
+        speedStatus.setText(phase.equals("Latency")?"Measuring ping":phase);speedometer.reset(phase);speedElapsed.setText("Preparing measurement…");
+    }
+    public void beginSpeedTest() {
+        speedometer.reset("Checking connection");speedDownload.setText("—");speedUpload.setText("—");speedPing.setText("—");speedElapsed.setText("Connecting…");speedServing.setText("Serving band: not sampled yet");
+    }
+    public void idleSpeed() {beginSpeedTest();speedStatus.setText("Ready to test");speedometer.reset("Ready");speedElapsed.setText("Choose a duration and start");}
+    public void speedProgress(String phase,double mbps,long bytes,int elapsed,int duration) {
+        speedometer.speed(mbps,phase+" · average");
+        speedElapsed.setText(String.format(Locale.ROOT,"%d / %d sec · %.1f MB",elapsed,duration,bytes/1000000.0));
+        (phase.equals("Download")?speedDownload:speedUpload).setText(String.format(Locale.ROOT,"%.1f",mbps));
+    }
+    public void showSpeedResult(JSONObject report) {
+        speedStatus.setText(SpeedTestStore.outcome(report));
+        JSONObject down=report.optJSONObject("download"),up=report.optJSONObject("upload");
+        speedDownload.setText(speedValue(down));speedUpload.setText(speedValue(up));
+        speedPing.setText(report.isNull("http_latency_ms")?"—":String.format(Locale.ROOT,"%.0f",report.optDouble("http_latency_ms")));
+        JSONObject last=up!=null?up:down;
+        if(last!=null)speedometer.speed(last.optDouble("mbps"),up!=null?"Last upload":"Last download");else speedometer.reset("No speed result");
+        speedElapsed.setText("Results saved · tap a history entry for details");
+        speedServing.setText("Serving (sampled): "+report.optString("serving_bands_sampled","unknown"));
+    }
+    private static String speedValue(JSONObject rate) {return rate==null?"—":String.format(Locale.ROOT,"%.1f",rate.optDouble("mbps"));}
+    public void showSpeedHistory(JSONArray history,int slot) {
+        speedHistoryCards.removeAllViews();int count=0;
+        for(int i=0;i<history.length();i++) {JSONObject r=history.optJSONObject(i);if(r!=null&&r.optInt("slot",-1)==slot)count++;}
+        speedHistory.setText(count==0?"No tests for this SIM yet.":count+" saved · tap a result for details");
+        int shown=0;
+        for(int i=0;i<history.length();i++) {
+            final JSONObject report=history.optJSONObject(i);if(report==null||report.optInt("slot",-1)!=slot)continue;
+            if(!showOlderSpeedTests&&shown>=3)break;shown++;
+            LinearLayout entry=column();entry.setPadding(dp(2),dp(14),dp(2),dp(14));entry.setMinimumHeight(dp(72));
+            text(entry,report.optString("serving_bands_sampled","unknown"),16,MINT,true);
+            String when=java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT,java.text.DateFormat.SHORT).format(new java.util.Date(report.optLong("started_ms")));
+            text(entry,when+" · "+SpeedTestStore.outcome(report),11,MUTED,false).setPadding(0,dp(4),0,dp(7));
+            String values="↓ "+speedValue(report.optJSONObject("download"))+"   ↑ "+speedValue(report.optJSONObject("upload"))+" Mbps";
+            String ping=report.isNull("http_latency_ms")?"—":String.format(Locale.ROOT,"%.0f",report.optDouble("http_latency_ms"));
+            text(entry,values+" · Ping "+ping+" ms",13,INK,true);
+            entry.setBackground(new RippleDrawable(ColorStateList.valueOf(0x2254D3BE),null,null));entry.setFocusable(true);
+            entry.setOnClickListener(v -> new android.app.AlertDialog.Builder(activity).setTitle("Speed test report")
+                .setMessage(SpeedTestStore.render(new JSONArray().put(report),slot)).setPositiveButton("Close",null).setNeutralButton("Copy",(d,w) -> {
+                    android.content.ClipboardManager clipboard=activity.getSystemService(android.content.ClipboardManager.class);
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Speed test report",SpeedTestStore.render(new JSONArray().put(report),slot)+"\n\n"+report.toString()));
+                    Toast.makeText(activity,"Report copied",Toast.LENGTH_SHORT).show();
+                }).show());
+            speedHistoryCards.addView(entry,new LinearLayout.LayoutParams(-1,-2));
+            View line=new View(activity);line.setBackgroundColor(LINE);speedHistoryCards.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));
+        }
+        if(count>3)navigationButton(speedHistoryCards,showOlderSpeedTests?"Show latest 3":"Show older results ("+(count-3)+")",() -> {showOlderSpeedTests=!showOlderSpeedTests;showSpeedHistory(history,slot);});
     }
     public void showBandEmpty(String message) {bandEmpty.setText(message);bandEmpty.setVisibility(message.isEmpty()?View.GONE:View.VISIBLE);}
     public CheckBox addBand(int band,String observation,boolean checked) {

@@ -13,17 +13,29 @@ import java.util.concurrent.atomic.*;
 
 /** Foreground cellular route and serving-cell sampling around the HTTP phases. */
 public final class SpeedTestSession {
-    public interface Progress {void update(String text);}
-    private final Context context;private final int slot;private final Progress progress;
+    public interface Progress {
+        void update(String text);
+        default void phase(String name) {update(name+"…");}
+        default void transfer(String name,double mbps,long bytes,int elapsed,int duration) {update(name+"…");}
+        default void latency(double ms) {}
+        default void serving(String bands) {}
+    }
+    private final Context context;private final int slot,seconds;private final Progress progress;
     private final AtomicBoolean cancelled=new AtomicBoolean();
     private volatile SpeedTestEngine engine;private long checkedAt;
     private ConnectivityManager cm;private Network network;private int subscription;private TelephonyManager tm;
     private final JSONArray samples=new JSONArray();private final List<int[]> bandSamples=new ArrayList<>();
-    public SpeedTestSession(Context context,int slot,Progress progress) {this.context=context;this.slot=slot;this.progress=progress;}
+    public SpeedTestSession(Context context,int slot,int seconds,Progress progress) {
+        if(seconds!=20&&seconds!=60)throw new IllegalArgumentException("Choose 20 or 60 seconds.");
+        this.context=context;this.slot=slot;this.seconds=seconds;this.progress=progress;
+    }
     public void cancel() {cancelled.set(true);SpeedTestEngine e=engine;if(e!=null)e.cancel();}
     public JSONObject run(String preference) throws Exception {
         JSONObject report=new JSONObject();report.put("schema",1);report.put("slot",slot);report.put("started_ms",System.currentTimeMillis());
-        report.put("provider","Cloudflare");report.put("method","4 HTTP streams; 10s/direction or 100 MB down / 20 MB up; end-to-end payload average");
+        report.put("provider","Cloudflare");report.put("method","4 HTTP streams; timed "+seconds+"s/direction; no fixed MB cutoff; adaptive upload requests; end-to-end payload average");
+        report.put("duration_per_direction_s",seconds);report.put("fixed_payload_cap",false);
+        report.put("transfer_response_timeout_ms",SpeedTestEngine.RESPONSE_TIMEOUT_MS);report.put("initial_upload_chunk_bytes",SpeedTestEngine.UPLOAD_CHUNK_BYTES);
+        report.put("transfer_connect_timeout_ms",SpeedTestEngine.CONNECT_TIMEOUT_MS);
         report.put("last_read_sa_preference",preference);report.put("serving_samples",samples);
         try {
             cm=context.getSystemService(ConnectivityManager.class);
@@ -37,19 +49,22 @@ public final class SpeedTestSession {
                 synchronized(this) {long now=SystemClock.elapsedRealtime();if(now-checkedAt>=500) {route();checkedAt=now;}}
             },new SpeedTestEngine.Listener() {
                 public void phase(String phase) {
-                    progress.update(phase+"…");if(!phase.equals("Latency"))sample("Before "+phase.toLowerCase(Locale.ROOT));
+                    progress.phase(phase);if(!phase.equals("Latency"))sample("Before "+phase.toLowerCase(Locale.ROOT));
                 }
                 public void progress(String phase,long bytes,long nanos) {
                     double mbps=nanos<=0?0:bytes*8000.0/nanos;
-                    progress.update(String.format(Locale.ROOT,"%s · %.1f Mbps · %.1f MB",phase,mbps,bytes/1000000.0));
+                    progress.transfer(phase,mbps,bytes,(int)Math.min(seconds,nanos/1000000000L),seconds);
                 }
-            });
+                public void latency(double ms) {progress.latency(ms);}
+            },new SpeedTestEngine.Config(seconds));
             if(cancelled.get())engine.cancel();SpeedTestEngine.Result result=engine.run();
             if(!cancelled.get())sample("After transfer");
             report.put("complete",result.complete()&&!cancelled.get());report.put("cancelled",result.cancelled||cancelled.get());report.put("error",cancelled.get()?"Stopped; incomplete results.":result.error);
             report.put("http_latency_ms",result.latencyMs<0?JSONObject.NULL:result.latencyMs);
             report.put("download",rate(result.download));report.put("upload",rate(result.upload));
+            report.put("failed_phase",result.failedPhase);report.put("error_type",result.errorType);
             report.put("received_payload_bytes",result.receivedBytes);report.put("sent_payload_bytes",result.sentBytes);
+            report.put("upload_acknowledged_bytes",result.uploadAcknowledgedBytes);
             // A SIM/route change at the last boundary must invalidate a previously successful result.
             if(!cancelled.get())route();
         } catch(Exception e) {report.put("complete",false);report.put("cancelled",cancelled.get());report.put("error",cancelled.get()?"Stopped; incomplete results.":e.getMessage());}
@@ -95,9 +110,11 @@ public final class SpeedTestSession {
             }
             int[] bands=new int[observed.size()];int i=0;for(int band:observed)bands[i++]=band;
             sample.put("serving_bands",array(bands));sample.put("serving_band_label",SpeedTestBands.names(bands));bandSamples.add(bands);
+            progress.serving(SpeedTestBands.names(bands));
         } catch(Exception e) {
             try {sample.put("observation_error",e.getMessage());sample.put("serving_band_label","unknown");}catch(JSONException ignored) {}
             bandSamples.add(new int[0]);
+            progress.serving("unknown");
         }
         samples.put(sample);
     }
