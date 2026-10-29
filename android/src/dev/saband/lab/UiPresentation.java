@@ -14,6 +14,7 @@ public final class UiPresentation {
     }
     public static String mode(int mode) {
         if(mode==64)return "NR only (5G)";
+        if(mode==16)return "LTE only (4G)";
         if(mode>0&&mode<128)return (mode&64)!=0?"5G with fallback":"5G not enabled";
         return "Not read yet";
     }

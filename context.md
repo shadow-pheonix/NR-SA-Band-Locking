@@ -43,12 +43,82 @@ history. Never publish credentials or private device identifiers here.
   so stuck ping work cannot starve throughput workers. Bounded operation/HTTP
   diagnostics, valid ping counts and Speeds measured · ping unavailable status
   added. Eight host suites/checks, including real localhost HTTP, and Android
-  compilation pass. No new APK authorized; public 0.12 stays unchanged.
+  compilation pass. The subsequent Build it request was paused by the user
+  before any build or version bump to add a Quick Settings tile. Public 0.12
+  stays unchanged. The user then authorized building immediately after the tile
+  implementation, without asking again. Candidate 0.13 is now built/verified;
+  publication is in progress.
 - Neighbor-band discovery remains unresolved: serving observations only on the
   tested firmware; its experimental QMI frequency request is unsupported.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
+
+## Current feature work: 5G Quick Settings tile (2026-10-29)
+
+User paused the requested build and asked for a 5G icon tile. On: selected SA
+bands and NR-only in the same verified SET. Off: LTE-only (QMI RAT mask 16),
+which is the tile's default off mode. A separate saved tile profile chooses SIM
+and bands; it does not change the manual Bands draft. Setup explicitly offers
+Save & use LTE only to establish the default. No silent LTE SET on app install,
+opening Quick Settings, or simply adding the tile. Tile actions clear boot
+reapply for the controlled slot so an older NR plan cannot undo LTE-off.
+Reuse the existing root helper and journal with live preflight, original backup,
+compare-before-SET, verification/rollback, no NSA/LTE band writes. LTE-only uses
+the existing mode-only helper path to preserve SA bands. Tile state comes from
+live preferences rather than a persisted on/off flag. Busy/failed/unknown must
+not claim success. Unlock before mutation; long press opens tile configuration.
+User then explicitly authorized: once implemented, build the APK without asking
+again. Finish source/checks, then build, verify and publish version 0.13.
+
+Implemented: original monochrome 5G icon; protected TileService; Android 13+
+add-tile request/manual fallback; long press opens Tools; per-tile SIM/bands
+configuration with select all/clear and Save & use LTE only. Defaults select all
+verified selectable bands. Setup preserves an existing manual band/radio draft.
+Configuration is private and bound to the original backup/device/firmware.
+On uses combined qmi-apply-plan (mode 64); off uses mode-only qmi-mode (16),
+preserving SA/NSA/LTE band masks. Fresh journal preflight and uncertain intent
+retention reuse existing backups; boot reapply is cleared on tile actions.
+Global modem/speed/boot lock is now a ReentrantLock: tile tryLock fails promptly
+while busy instead of queueing an unexpected later toggle. State is refreshed
+from live reads whenever the panel opens; read failures show Unknown, not a
+verified LTE state. NR-only with a different mask remains on and can be disabled.
+Opening/adding tile never writes. Unlock is required before tile mutation.
+
+Validation checkpoint: Android API 34 Java compilation and seven host suites
+including QuickTileTest pass. Native transport + 15 EFS + 37 QMI mock cases pass,
+including both-slot combined-on/mode-only-off packet checks and LTE-off rollback
+to NR-only. Tile delivery, HyperOS rendering, background root and live LTE/NR
+registration still require phone validation. The user authorized building after implementation, without asking again.
+Version 0.13 / code 13 is built and verified; publication is in progress.
+Nine Java/report/real-HTTP suites pass. Native transport + 15 EFS + 37 QMI
+(52 total native mock cases) pass. Phone validation is still pending.
+
+## Approved 0.13 build checkpoint (2026-10-29)
+
+User explicitly authorized implementation followed by build without asking again.
+This APK includes both the 5G tile and the previously published phase-isolation
+speed-test fix. No native protocol change; helper label is 0.13.
+
+- APK `sa-band-lab-0.13-arm64.apk`: **157,237 bytes**.
+- APK SHA-256: `2c95ae72a04a473254304390a6f8004ad8b4ffddfcb3b32e651422cf7a0a5605`.
+- Helper: **76,712 bytes**; SHA-256
+  `51f6454cc6688b0dd8e3312306f3888679489b256c688a5ddd19aded3c8b2f77`.
+- Signature: v3 verified, same official certificate SHA-256
+  `c9d0695602ec1ede8245f7bcb39d3cf89ec9721927879b36b23d94c78d766fc7`.
+- Manifest: package unchanged, code 13/name 0.13-sa-test, API 30/34, ARM64;
+  system-protected exported TileService, QS_TILE/TOGGLEABLE_TILE metadata,
+  long-press preferences action and original monochrome 5G icon verified.
+  Existing runtime permissions are unchanged.
+- ZIP integrity/alignment, exact bundled README/license/transport notices,
+  new tile and isolated speed-test DEX classes, exact ARM64 helper and four
+  16 KiB ELF LOAD alignments checked. No native test mock switch/private key
+  packaged. Earlier locally available APK hashes unchanged.
+- Seven core Java suites (including QuickTileTest), report/history and real
+  localhost HTTP suites pass; transport boundary checks and 52 native mocks
+  pass. No emulator/phone execution was performed for the new tile or latency fix.
+- Publication is pending at this checkpoint. Install over the previous official
+  app to retain original backups; do not uninstall as part of an update.
 
 ## User intent and standing decisions
 
@@ -947,8 +1017,10 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-The new phase-isolation source fix, review and host checks are complete. Ask
-before a new APK, following the user's earlier instruction. The 0.12
+The phase-isolation source fix and host checks are complete. A later build
+approval was paused before building to implement the 5G Quick Settings tile.
+The user subsequently authorized building immediately after implementation;
+finish the tile checks and build/publish 0.13 without another confirmation. The 0.12
 binary stays public and unchanged. Next device validation must establish that a
 failed/missing ping still reaches Before download/Before upload, and inspect
 phase_failures/operations if a throughput phase also fails. Do not describe host

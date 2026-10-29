@@ -256,7 +256,7 @@ static void hex_field(sbuf *s,const char *key,const uint8_t *data,size_t n) {
     char hex[513];if(n>256)n=256;hex_encode(data,n,hex);sb_str(s,",\"");sb_str(s,key);sb_str(s,"\":");sb_json_str(s,hex);
 }
 static void result(struct context *c,int ok,const char *state,const struct preferences *p,int attempted,int rolled) {
-    sbuf s;sb_init(&s);sb_fmt(&s,"{\"helper_version\":\"0.12\",\"backend\":\"qmi_nas\",\"read_profile\":\"%s\",\"ok\":%s,\"state\":",c->frequency_query?"qmi-nas-nr-frequencies-v1":"qmi-nas-sa-v1",ok?"true":"false");sb_json_str(&s,state);
+    sbuf s;sb_init(&s);sb_fmt(&s,"{\"helper_version\":\"0.13\",\"backend\":\"qmi_nas\",\"read_profile\":\"%s\",\"ok\":%s,\"state\":",c->frequency_query?"qmi-nas-nr-frequencies-v1":"qmi-nas-sa-v1",ok?"true":"false");sb_json_str(&s,state);
     sb_fmt(&s,",\"slot\":%d,\"write_attempted\":%s,\"rollback_verified\":%s,\"write_ready\":%s,\"duration\":\"until_power_cycle\",\"transport\":",c->slot,attempted?"true":"false",rolled?"true":"false",ok&&c->hardware_known&&!c->frequency_query?"true":"false");
     char desc[96];snprintf(desc,sizeof desc,"QMI NAS qrtr %u:%u instance %u",c->nas.peer.node,c->nas.peer.port,c->nas.peer.instance);sb_json_str(&s,desc);
     sb_str(&s,",\"error\":");sb_json_str(&s,ok?"":c->error);sb_str(&s,",\"capability_error\":");sb_json_str(&s,c->hardware_error);

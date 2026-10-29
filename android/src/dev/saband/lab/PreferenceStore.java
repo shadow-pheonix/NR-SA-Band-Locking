@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 
 /** All accesses that can lead to SET share one process-wide transaction lock. */
 public final class PreferenceStore {
-    public static final Object LOCK=new Object();
+    public static final java.util.concurrent.locks.ReentrantLock LOCK=new java.util.concurrent.locks.ReentrantLock();
     public static JSONObject read(Context context,String name) throws Exception {
         AtomicFile file=new AtomicFile(new File(context.getFilesDir(),name));
         return file.getBaseFile().exists()?new JSONObject(new String(file.readFully(),StandardCharsets.UTF_8)):null;

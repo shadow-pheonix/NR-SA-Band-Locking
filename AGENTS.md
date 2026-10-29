@@ -27,8 +27,12 @@
 
 - This app controls **5G SA only**. Read NSA/LTE to verify preservation; do not
   add NSA writes or restart NSA development without a new user request.
-- NR-only and band selection are staged together and applied by the same Apply
-  button. Do not restore the old immediately-applied NR-only checkbox behavior.
+- The user-authorized 5G Quick Settings tile is an additional explicit action:
+  on applies its saved bands + NR-only together; off applies LTE-only mode while
+  preserving band masks. It uses fresh verification and clears boot reapply for
+  that slot. Adding/opening the tile must never write.
+- NR-only and band selection in the Bands screen are staged together and
+  applied by the same Apply button. Do not restore the old immediately-applied NR-only checkbox behavior.
 - Preserve original backups. Refresh expected state from live reads, and retain
   the helper's compare-before-SET check, verification and rollback behavior.
 - Reboot reapply is explicit opt-in, off by default, with bounded boot-time

@@ -19,7 +19,7 @@ public final class LabLayout {
         void selectSim(int slot);void read();void refreshNetwork();void apply();void restore();
         void selectAll();void clearAll();void copyReport();void exportBackup();void importBackup();
         void disableReapply();void frequencies();void efs();void networkSettings();void draftChanged();void statusDetails();
-        void startSpeed();void stopSpeed();void copySpeed();void clearSpeed();
+        void startSpeed();void stopSpeed();void copySpeed();void clearSpeed();void configureTile();void addTile();
     }
     public static final int BG=Color.rgb(10,16,24), SURFACE=Color.rgb(18,28,40), LINE=Color.rgb(37,51,66);
     public static final int INK=Color.rgb(235,241,248), MUTED=Color.rgb(154,174,193), MINT=Color.rgb(84,211,190), AMBER=Color.rgb(245,190,109);
@@ -27,7 +27,7 @@ public final class LabLayout {
     public final LinearLayout root;
     public final ArrayList<Button> actions=new ArrayList<>();
     public final GridLayout bandBox;
-    public final TextView status,current,radio,supported,modemRadio,bootStatus;
+    public final TextView status,current,radio,supported,modemRadio,bootStatus,tileSummary;
     public final Button apply,restore,selectAll,deselectAll;
     public final Switch nrOnly,persistLock;
     public final Button startSpeed,stopSpeed,copySpeed,clearSpeed;
@@ -146,6 +146,10 @@ public final class LabLayout {
         clearSpeed=button(history,"Clear history",false,callbacks::clearSpeed);
 
         LinearLayout tools=scrollPage(UiPresentation.TOOLS);heading(tools,"Tools & recovery","Keep your backup. Find details when you need them.");
+        LinearLayout tile=card(tools);eyebrow(tile,"5G QUICK SETTINGS TILE");
+        tileSummary=text(tile,"On: tile bands + NR only. Off: LTE only.",16,INK,true);
+        text(tile,"Choose the SIM above, read live preferences, then configure the tile's own bands. Setup uses LTE only by default. Tile actions turn off reboot reapply for that SIM; changes last until reboot.",12,MUTED,false);
+        button(tile,"Configure 5G tile",false,callbacks::configureTile);button(tile,"Add tile to Quick Settings",false,callbacks::addTile);
         LinearLayout backups=card(tools);eyebrow(backups,"YOUR BACKUP");backupValue=text(backups,"No backup loaded",18,INK,true);
         text(backups,"Your original SA preferences stay saved on this phone. Export a copy before testing.",13,MUTED,false);
         button(backups,"Export backups",false,callbacks::exportBackup);button(backups,"Import backups",false,callbacks::importBackup);

@@ -17,9 +17,9 @@ meaningful checkpoint.
 
 ## Download the APK
 
-**[Download SA Band Lab 0.12 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.12.0/sa-band-lab-0.12-arm64.apk)**
+**[Download SA Band Lab 0.13 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.13.0/sa-band-lab-0.13-arm64.apk)**
 
-[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.12.0)
+[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.13.0)
 · [All releases](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases)
 
 Download the `.apk` file to install the app. GitHub's **Source code (zip)** is for
@@ -63,17 +63,35 @@ are requested separately when missing; firmware can still omit serving bands.
 [Preview the screen](docs/assets/speedtest-overview.svg) (illustrative design
 reference) · [Full speed-test guide and limitations](docs/SPEEDTEST.md).
 
-### Next source fix: failed ping no longer blocks throughput
+### Version 0.13: 5G Quick Settings tile and independent speed-test phases
+
+**New 5G tile:** on applies its saved SA bands and NR-only together; off applies
+**LTE only**, preserving band preferences. Choose the SIM, read preferences,
+then open **Tools → Configure 5G tile**. Choose the tile bands (Select all/Clear
+available) and tap **Save & use LTE only** to establish its default off mode.
+Tap **Add tile to Quick Settings**, or swipe down twice → Edit → drag **5G**
+into your tiles. Long press 5G to return to Tools. The saved tile SIM stays fixed
+when you switch SIMs elsewhere in the app. Tile settings are separate from your
+manual Bands draft.
+
+Tile actions disable reboot reapply for that SIM. Changes last until reboot;
+installing, adding the tile or opening Quick Settings does not force LTE.
+After reboot, the tile reads the actual modem mode; it does not automatically
+force an off state or reapply NR. Unlock before toggling. Busy/unknown/failed
+reads do not claim a verified LTE/NR change. **NR-only can interrupt calls/data
+and needs usable SA coverage.** Neither tile mode changes the mobile-data SIM.
+Use mobile network settings to return to an automatic network mode. Tile
+delivery and LTE/NR registration still require testing on the phone.
 
 A later 0.12 phone report timed out during latency before either speed direction
 started. The new source makes latency/download/upload independent for endpoint
 errors, isolates phase workers and adds request-stage diagnostics. If download
 and upload finish without ping, history shows **Speeds measured · ping unavailable**.
-Stop and SIM/network changes still end the run. Eight host suites/checks,
-including real localhost HTTP, pass; phone validation is pending.
+Stop and SIM/network changes still end the run. Host suites include tile
+transactions, real localhost HTTP and native modem mocks; phone validation is pending.
 
-**This fix is not in the downloadable 0.12 APK yet.** See [the speed-test
-guide](docs/SPEEDTEST.md) for the source behavior and limits.
+Both changes are included in **0.13**. See [the speed-test guide](docs/SPEEDTEST.md)
+for measurement behavior and limits.
 
 ### Version 0.9: reboot fix and optional reapply
 

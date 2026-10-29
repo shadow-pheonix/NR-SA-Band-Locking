@@ -1,15 +1,15 @@
 # Compare bands with Speedtest
 
-This guide describes **SA Band Lab 0.12**, which includes the meter, timed tests
-and revised timeout handling. The older 0.11 APK used a fixed 100/20 MB cutoff
+This guide describes **SA Band Lab 0.13**, which includes the meter, timed tests
+and independent latency/download/upload phases. The older 0.11 APK used a fixed 100/20 MB cutoff
 and shorter response timeout. Phone validation of the new behavior is pending.
 
-**Unreleased follow-up source:** a 0.12 phone report then failed during the
+**Included in 0.13:** a 0.12 phone report failed during the
 latency phase after about six seconds, before any data transfer. Source now
 isolates latency, download and upload: an unavailable ping does not prevent
 speed measurement, and one endpoint failure does not skip the other direction.
-Stop and disallowed/changed SIM or network remain fatal. This fix is pending a
-new approved APK build and phone validation; it is not in the 0.12 download.
+Stop and disallowed/changed SIM or network remain fatal. The corrected phase isolation is included in 0.13;
+phone validation is pending.
 
 The user's 0.11 phone report confirms a completed download around **266 Mbps**,
 HTTP response latency around **79 ms** and fresh **n78** serving observations.

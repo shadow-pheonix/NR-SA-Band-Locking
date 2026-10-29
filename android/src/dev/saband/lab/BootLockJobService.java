@@ -16,7 +16,9 @@ public final class BootLockJobService extends JobService {
             int attempt=params.getExtras().getInt("attempt",0),slots=params.getExtras().getInt("slot_mask",3),retryMask=0;
             for(int slot=0;slot<2&&!cancelled.get();slot++) {
                 if((slots&(1<<slot))==0)continue;
-                synchronized(PreferenceStore.LOCK) {if(!cancelled.get()&&applySlot(slot,attempt,cancelled))retryMask|=1<<slot;}
+                PreferenceStore.LOCK.lock();
+                try {if(!cancelled.get()&&applySlot(slot,attempt,cancelled))retryMask|=1<<slot;}
+                finally {PreferenceStore.LOCK.unlock();}
             }
             // Retry only slots whose preflight failed, never another slot's uncertain write.
             if(!cancelled.get()) {

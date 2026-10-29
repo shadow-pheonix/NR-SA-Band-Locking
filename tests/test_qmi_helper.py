@@ -246,6 +246,27 @@ class QmiTests(unittest.TestCase):
             m=self.modem(fault);r=m.call('qmi-mode',0,92,64)
             self.assertEqual(r['state'],'mode_unavailable',r);self.assertEqual(m.mode_sets,[])
 
+    def test_tile_nr_bands_on_and_lte_only_off_for_both_slots(self):
+        for slot in [0,1]:
+            m=self.modem();nsa=m.nsa.copy();lte=m.lte;other_sa=m.sa[1-slot]
+            r=m.call('qmi-apply-plan',slot,m.original[slot].hex(),m.sa[slot].hex(),m.nsa[slot].hex(),mask(78).hex(),92,64)
+            self.assertTrue(r['ok'],r);self.assertEqual(m.modes[slot],64);self.assertEqual(m.sa[slot],mask(78))
+            self.assertEqual(len(m.combined_sets),1);self.assertEqual(m.mode_sets,[])
+            r=m.call('qmi-mode',slot,64,16)
+            self.assertTrue(r['ok'],r);self.assertEqual(r['rat_mode_preference'],16)
+            self.assertEqual(m.mode_sets[0][1][7:].hex(),'170100001102001000')
+            self.assertEqual(m.sa[slot],mask(78));self.assertEqual(m.sa[1-slot],other_sa)
+            self.assertEqual(m.nsa,nsa);self.assertEqual(m.lte,lte);self.assertEqual(m.modes[1-slot],92)
+            r=m.call('qmi-mode',slot,16,16)
+            self.assertTrue(r['ok']);self.assertFalse(r['write_attempted']);self.assertEqual(len(m.mode_sets),1)
+
+    def test_tile_lte_failure_restores_previous_nr_only_mode(self):
+        m=self.modem();r=m.call('qmi-apply-plan',0,m.original[0].hex(),m.sa[0].hex(),m.nsa[0].hex(),mask(78).hex(),92,64)
+        self.assertTrue(r['ok']);m.fault='mode_error'
+        r=m.call('qmi-mode',0,64,16)
+        self.assertFalse(r['ok'],r);self.assertTrue(r['rollback_verified'],r)
+        self.assertEqual(m.modes[0],64);self.assertEqual(m.sa[0],mask(78));self.assertEqual(m.sets,[])
+
     def test_mode_failure_rolls_back_only_mode(self):
         for fault in ['mode_error','mode_bad_readback']:
             m=self.modem(fault);r=m.call('qmi-mode',0,92,64)

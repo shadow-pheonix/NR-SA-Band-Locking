@@ -61,6 +61,8 @@ public class MainActivity extends Activity {
     private SpeedTestSession speedSession;
     private boolean speedRunning;
     private JSONArray speedHistory=new JSONArray();
+    private long seenChangeFile;
+    private JSONObject tileConfig;
     private final Handler uiHandler=new Handler(Looper.getMainLooper());
     private final Runnable ageTick=new Runnable() {public void run() {if(alive) {refreshPresentation();refreshBandLabels();uiHandler.postDelayed(this,15000);}}};
 
@@ -89,6 +91,8 @@ public class MainActivity extends Activity {
             public void stopSpeed() {stopSpeedTest();}
             public void copySpeed() {copySpeedReports();}
             public void clearSpeed() {clearSpeedHistory();}
+            public void configureTile() {MainActivity.this.configureTile();}
+            public void addTile() {addQuickTile();}
             public void draftChanged() {if(!bindingUi)refreshEnabled();}
             public void statusDetails() {new AlertDialog.Builder(MainActivity.this).setTitle("Operation details").setMessage(status.getText()).setPositiveButton("Close",null).setNeutralButton("Copy report",(d,w) -> MainActivity.this.copyReport()).show();}
         });
@@ -107,6 +111,7 @@ public class MainActivity extends Activity {
             if(restoredBands!=null)status.setText("Read preferences again to restore your previous selection for review.");
         }
         refreshEnabled();
+        if(android.service.quicksettings.TileService.ACTION_QS_TILE_PREFERENCES.equals(getIntent().getAction()))screen.showPage(UiPresentation.TOOLS);
     }
     private void selectSlot(int next) {
         if(busy||next==slot)return;
@@ -116,7 +121,7 @@ public class MainActivity extends Activity {
     }
     private void resetSlot(int next) {
         bindingUi=true;
-        slot=next;probe=null;backup=null;bandBox.removeAllViews();bands.clear();restoredBands=null;restoredBandScroll=-1;
+        slot=next;probe=null;backup=null;bandBox.removeAllViews();bands.clear();restoredBands=null;restoredBandScroll=-1;seenChangeFile=new File(getFilesDir(),"qmi-last-change-slot"+slot+".json").lastModified();
         lastHelperResult=null;lastReport="No root operation has run for this SIM.";
         lastChange=null;lastEfsResult=null;nrOnly.setChecked(false);persistLock.setChecked(false);activeBootPlan=null;lastBootResult=null;
         lastBandObservation=null;bandSnapshot=null;bandObservedElapsed=-1;lastModemFrequencies=null;
@@ -125,7 +130,7 @@ public class MainActivity extends Activity {
         supported.setText("Read preferences to load your phone's reported NR band support.");
         current.setText("No modem preferences read yet.");bootStatus.setText("Saved reboot plan: not checked.");
         status.setText("SIM "+(slot+1)+" · Read preferences to get started.");screen.setSlot(slot);
-        screen.showBandEmpty("Your selectable bands will appear after a successful read.");bindingUi=false;loadSpeedHistory();refreshEnabled();
+        screen.showBandEmpty("Your selectable bands will appear after a successful read.");bindingUi=false;loadSpeedHistory();refreshEnabled();loadTileSummary();
     }
     private void disableRebootReapply() {
         final int s=slot;
@@ -143,6 +148,76 @@ public class MainActivity extends Activity {
     private void openNetworkSettings() {
         try {startActivity(new Intent(android.provider.Settings.ACTION_NETWORK_OPERATOR_SETTINGS));}
         catch(Exception e) {startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS));}
+    }
+    private void addQuickTile() {
+        if(Build.VERSION.SDK_INT>=33) {
+            android.app.StatusBarManager bar=getSystemService(android.app.StatusBarManager.class);
+            try {bar.requestAddTileService(FiveGTileService.component(this),"5G",android.graphics.drawable.Icon.createWithResource(this,getResources().getIdentifier("ic_tile_5g","drawable",getPackageName())),getMainExecutor(),result -> {
+                if(result==android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED||result==android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED)status.setText("5G tile added. Configure it in Tools before use; long press the tile to return here.");
+                else status.setText("You can add 5G manually: open Quick Settings → Edit tiles → drag 5G into your active tiles.");
+            });}catch(RuntimeException e) {tileAddInstructions();}
+        } else tileAddInstructions();
+    }
+    private void loadTileSummary() {
+        worker.execute(() -> {
+            if(!PreferenceStore.LOCK.tryLock())return;
+            try {JSONObject p=QuickTileStore.load(this);ui(() -> {
+                tileConfig=p;
+                screen.tileSummary.setText(p==null?"Not configured\nOn: tile bands + NR only. Off: LTE only.":"SIM "+(p.optInt("slot")+1)+" · On: "+bandNames(p.optString("target_sa"))+" + NR only\nOff: LTE only");
+            });}catch(Exception e) {ui(() -> screen.tileSummary.setText("Tile settings could not be read. Configure the tile again."));}
+            finally {PreferenceStore.LOCK.unlock();}
+        });
+    }
+    private void tileAddInstructions() {
+        new AlertDialog.Builder(this).setTitle("Add the 5G tile").setMessage("Swipe down twice to open Quick Settings, tap Edit (or the pencil), then drag 5G into your active tiles. Long press it to return to tile settings.").setPositiveButton("OK",null).show();
+    }
+    private void configureTile() {
+        if(busy)return;
+        if(!ready()||!probe.optBoolean("write_ready")) {
+            new AlertDialog.Builder(this).setTitle("Read SIM "+(slot+1)+" preferences first")
+                .setMessage("Choose the SIM you want the tile to control. Read its live preferences to capture a backup and load selectable bands, then return to Tools → Configure 5G tile.")
+                .setNegativeButton("Cancel",null).setPositiveButton("Read preferences",(d,w) -> {screen.showPage(UiPresentation.BANDS);readPreferences();}).show();return;
+        }
+        final int s=slot;
+        work("Loading tile settings…",() -> {JSONObject profile=QuickTileStore.load(this);ui(() -> showTileConfiguration(s,profile));});
+    }
+    private void showTileConfiguration(int s,JSONObject profile) {
+        ArrayList<Integer> choices=new ArrayList<>();for(CheckBox b:bands)choices.add((Integer)b.getTag());
+        if(choices.isEmpty()) {status.setText("No verified tile bands. Read preferences first.");return;}
+        boolean reuse=profile!=null&&profile.optInt("slot",-1)==s;
+        ScrollView scroll=new ScrollView(this);LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(24,12,24,12);scroll.addView(content);
+        TextView explanation=new TextView(this);explanation.setText("On: selected bands + NR only, applied together.\nOff: LTE only. Your tile controls SIM "+(s+1)+" even if you later switch SIMs in the app.\n\nSave sets up the tile and applies LTE only as its default. Reboot reapply is disabled for this SIM. This can interrupt data/calls and does not change the mobile-data SIM. No permanent modem write.\n");content.addView(explanation);
+        LinearLayout bulk=new LinearLayout(this);content.addView(bulk);ArrayList<CheckBox> picks=new ArrayList<>();
+        Button all=new Button(this);all.setText("Select all");bulk.addView(all,new LinearLayout.LayoutParams(0,-2,1));
+        Button none=new Button(this);none.setText("Clear");bulk.addView(none,new LinearLayout.LayoutParams(0,-2,1));
+        for(int n:choices) {CheckBox pick=new CheckBox(this);pick.setText("n"+n);pick.setTag(n);pick.setChecked(!reuse||hasBand(profile.optString("target_sa"),n));content.addView(pick);picks.add(pick);}
+        all.setOnClickListener(v -> {for(CheckBox p:picks)p.setChecked(true);});none.setOnClickListener(v -> {for(CheckBox p:picks)p.setChecked(false);});
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("5G tile · SIM "+(s+1)).setView(scroll).setNegativeButton("Cancel",null).setPositiveButton("Save & use LTE only",null).create();
+        dialog.setOnShowListener(v -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(button -> {
+            byte[] mask=new byte[64];for(CheckBox p:picks)if(p.isChecked()) {int n=(Integer)p.getTag()-1;mask[n/8]|=(byte)(1<<(n%8));}
+            StringBuilder hex=new StringBuilder();for(byte b:mask)hex.append(String.format(Locale.ROOT,"%02x",b&255));String target=hex.toString();
+            try {QuickTilePolicy.validate(target,backup.optString("original_sa"),probe.optString("supported_nr_hex"));}
+            catch(IllegalArgumentException e) {Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show();return;}
+            dialog.dismiss();saveTile(s,target);
+        }));dialog.show();
+    }
+    private void saveTile(int s,String target) {
+        final int[] draft=hasDraft()?selectedBands():null;final boolean draftNr=nrOnly.isChecked(),draftReboot=persistLock.isChecked();
+        work("Saving tile and verifying LTE only…",() -> {
+            JSONObject b=loadBackup(s);
+            if(b==null)throw new IOException("Read preferences first.");
+            QuickTileStore.save(this,s,target,b,probe.optString("supported_nr_hex"));
+            JSONObject r=QuickTileStore.apply(this,false);
+            JSONObject saved=loadBackup(s),change=loadLastChange(s);
+            ui(() -> {
+                backup=saved;probe=r.optBoolean("ok")?r:null;lastHelperResult=r;lastChange=change;activeBootPlan=null;persistLock.setChecked(false);showBootStatus();showPreferences();
+                if(draft!=null)restoreChoices(draft,draftNr,draftReboot);
+                seenChangeFile=new File(getFilesDir(),"qmi-last-change-slot"+s+".json").lastModified();
+                screen.tileSummary.setText("SIM "+(s+1)+" · On: "+bandNames(target)+" + NR only\nOff: LTE only");
+                status.setText(r.optBoolean("ok")?"Tile saved. LTE only verified. Add the 5G tile to Quick Settings, then tap it to enable NR only and your tile bands.":"Tile profile saved, but LTE only failed: "+r.optString("error")+" Read preferences before retrying.");
+            });
+            loadTileSummary();
+        });
     }
     /** Only interrupt the user's flow when the system Location switch is actually off. */
     private boolean requireLocationEnabled() {
@@ -186,7 +261,8 @@ public class MainActivity extends Activity {
         worker.execute(() -> {
             try {
                 JSONObject result;
-                synchronized(PreferenceStore.LOCK) {result=session.run(preference);}
+                PreferenceStore.LOCK.lock();
+                try {result=session.run(preference);}finally {PreferenceStore.LOCK.unlock();}
                 String saveError="";
                 try {SpeedTestStore.add(this,result);}catch(Exception e) {saveError=" History could not be saved: "+e.getMessage();}
                 final String warning=saveError;final JSONObject finished=result;
@@ -255,7 +331,11 @@ public class MainActivity extends Activity {
         if(ready()) {state.putIntArray("draft_bands",selectedBands());state.putBoolean("draft_nr",nrOnly.isChecked());state.putBoolean("draft_reboot",persistLock.isChecked());}
         else if(restoredBands!=null) {state.putIntArray("draft_bands",restoredBands);state.putBoolean("draft_nr",restoredNr);state.putBoolean("draft_reboot",restoredReboot);}
     }
-    @Override protected void onResume() {super.onResume();uiHandler.removeCallbacks(ageTick);uiHandler.post(ageTick);}
+    @Override protected void onResume() {
+        super.onResume();uiHandler.removeCallbacks(ageTick);uiHandler.post(ageTick);
+        loadTileSummary();
+        if(probe!=null&&!busy&&seenChangeFile!=new File(getFilesDir(),"qmi-last-change-slot"+slot+".json").lastModified())readPreferences();
+    }
     @Override protected void onPause() {uiHandler.removeCallbacks(ageTick);if(speedRunning)stopSpeedTest();super.onPause();}
     private void refreshEnabled() {
         for(Button b:actions)b.setEnabled(!busy);
@@ -282,9 +362,9 @@ public class MainActivity extends Activity {
         if(busy)return;
         busy=true;status.setText(text);refreshEnabled();
         worker.execute(() -> {
-            try {synchronized(PreferenceStore.LOCK) {job.run();}}
+            try {PreferenceStore.LOCK.lock();try {job.run();}finally {PreferenceStore.LOCK.unlock();}}
             catch(Exception e) {lastHelperResult=null;lastReport="ERROR: "+e.toString();ui(() -> status.setText(lastReport));}
-            finally {ui(() -> {busy=false;refreshEnabled();});}
+            finally {FiveGTileService.refresh();ui(() -> {busy=false;refreshEnabled();});}
         });
     }
     private void ui(Runnable r) {if(alive)runOnUiThread(() -> {if(alive) {r.run();refreshPresentation();}});}
@@ -323,6 +403,7 @@ public class MainActivity extends Activity {
                 }
             }
             JSONObject selected=b,change=loadLastChange(s),plan=BootPlans.load(this,s),bootResult=PreferenceStore.read(this,"boot-result-slot"+s+".json");
+            seenChangeFile=new File(getFilesDir(),"qmi-last-change-slot"+s+".json").lastModified();
             ui(() -> {probe=r;backup=selected;lastChange=change;activeBootPlan=plan;lastBootResult=bootResult;persistLock.setChecked(plan!=null);showBootStatus();status.setText(r.optBoolean("ok")?(r.optBoolean("write_ready")?"Live preferences read. Backup and NR capability list are ready.":"Live preferences backed up. Apply disabled: "+r.optString("capability_error")):r.optString("error","Read failed.")+"\nNo preference SET was sent. Open Tools to copy the diagnostic report.");showPreferences();
                 if(ready()&&keep!=null) {restoreChoices(keep,keepNr,keepReboot);restoredBands=null;status.setText(r.optBoolean("write_ready")?"Previous choices restored where still selectable. Review them, then press Apply.":"Preferences read. Apply is unavailable: "+r.optString("capability_error"));}
                 if(ready()&&restoredBandScroll>=0) {screen.restoreScroll(UiPresentation.BANDS,restoredBandScroll);restoredBandScroll=-1;}
@@ -445,7 +526,7 @@ public class MainActivity extends Activity {
         Toast.makeText(this,"Report copied",Toast.LENGTH_SHORT).show();
     }
     private String report() {
-        JSONObject r=new JSONObject();try {r.put("app","SA Band Lab 0.12");r.put("model",Build.MODEL);r.put("android",Build.VERSION.RELEASE);r.put("fingerprint",Build.FINGERPRINT);r.put("baseband",baseband());r.put("slot",slot);r.put("helper_result",lastHelperResult==null?lastReport:lastHelperResult);if(lastChange!=null)r.put("last_preference_change",lastChange);r.put("reapply_after_reboot_enabled",activeBootPlan!=null);if(activeBootPlan!=null)r.put("boot_reapply_plan",activeBootPlan);if(lastBootResult!=null)r.put("last_boot_reapply",lastBootResult);if(lastEfsResult!=null)r.put("efs_diagnostic",lastEfsResult);r.put("serving_state",radio.getText());if(lastBandObservation!=null)r.put("five_g_observation",lastBandObservation);if(lastModemFrequencies!=null)r.put("modem_frequencies",lastModemFrequencies);if(backup!=null)r.put("backup",backup);for(int i=0;i<speedHistory.length();i++) {JSONObject test=speedHistory.optJSONObject(i);if(test!=null&&test.optInt("slot",-1)==slot) {r.put("latest_speed_test",test);break;}}return r.toString(2);}catch(Exception e) {return lastReport;}
+        JSONObject r=new JSONObject();try {r.put("app","SA Band Lab 0.13");r.put("model",Build.MODEL);r.put("android",Build.VERSION.RELEASE);r.put("fingerprint",Build.FINGERPRINT);r.put("baseband",baseband());r.put("slot",slot);r.put("helper_result",lastHelperResult==null?lastReport:lastHelperResult);if(lastChange!=null)r.put("last_preference_change",lastChange);if(tileConfig!=null)r.put("quick_tile_profile",tileConfig);r.put("reapply_after_reboot_enabled",activeBootPlan!=null);if(activeBootPlan!=null)r.put("boot_reapply_plan",activeBootPlan);if(lastBootResult!=null)r.put("last_boot_reapply",lastBootResult);if(lastEfsResult!=null)r.put("efs_diagnostic",lastEfsResult);r.put("serving_state",radio.getText());if(lastBandObservation!=null)r.put("five_g_observation",lastBandObservation);if(lastModemFrequencies!=null)r.put("modem_frequencies",lastModemFrequencies);if(backup!=null)r.put("backup",backup);for(int i=0;i<speedHistory.length();i++) {JSONObject test=speedHistory.optJSONObject(i);if(test!=null&&test.optInt("slot",-1)==slot) {r.put("latest_speed_test",test);break;}}return r.toString(2);}catch(Exception e) {return lastReport;}
     }
     private void exportBackups() {
         Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"sa-band-lab-backup.json");startActivityForResult(i,100);

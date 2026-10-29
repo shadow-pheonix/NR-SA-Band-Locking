@@ -107,13 +107,13 @@ existing operation/controller boundary. The Android theme is in
 
 ## Validation and remaining checks
 
-The signed 0.12 APK build passes, including Java/D8 and full AAPT2 resource
+The signed 0.13 APK build passes, including Java/D8 and full AAPT2 resource
 linking. Package inspection confirms the adaptive/themed icon and theme. The original five Java
 host suites cover the existing observation/radio/journal/boot logic plus the
 new Apply gates, draft detection, mask labels, and fresh/stale/cached/neighbor
 presentation. No native helper protocol code changed. These checks do not
 execute Android views or prove runtime layout, focus order, launcher behavior,
-font scaling or navigation on the phone. Review those using the 0.12 APK.
+font scaling or navigation on the phone. Review those using the 0.13 APK.
 
 The speed-test source additionally passes transfer-loop and report/history host
 tests and Android Java compilation. A tiny live 1 KB download/upload smoke check
@@ -127,7 +127,42 @@ Android design references:
 [window insets](https://developer.android.com/reference/android/view/WindowInsets),
 [touch target guidance](https://support.google.com/accessibility/android/answer/7101858).
 
-The unreleased phase-isolation follow-up retains this layout. Its shared outcome
+Version 0.13 phase isolation retains this layout. Its shared outcome
 label reads **Speeds measured · ping unavailable** if both rate phases finish
 without latency, and keeps missing ping as a dash. Full reports add per-phase
-HTTP-operation diagnostics. This source fix is not in the 0.12 APK yet.
+HTTP-operation diagnostics. This fix ships in 0.13; phone validation is pending.
+
+
+## 0.13 Quick Settings tile
+
+Tools has a 5G tile card showing its saved SIM/bands and two actions: Configure
+5G tile and Add tile to Quick Settings. Choose the SIM above and read live
+preferences first. The scrollable configuration contains a separate checkbox
+per verified band, Select all/Clear and Save & use LTE only. This explicit save
+establishes LTE-only as the default off mode; it preserves any manual Bands draft.
+
+The monochrome 5G icon is original vector artwork. Android 13+ offers the system
+add-tile prompt, with manual edit instructions for older Android/OEM behavior.
+Long press opens Tools. An unconfigured tile opens Tools on tap without writing.
+On applies tile bands + NR-only together; off applies mode-only LTE, preserving
+SA/NSA/LTE band masks. The tile controls its saved SIM, independent of the app's
+current SIM selector, and clears that slot's boot reapply before a change.
+
+The panel reads live preferences: active means NR-only, inactive LTE-only or an
+explicit Other mode/Unknown subtitle. NR-only with different bands remains
+active and is labeled Other bands, so a tap can turn it off. Reading/applying
+shows Working; no optimistic on/off update. Secure lock requires unlock before
+mutation. Busy operations fail promptly without a deferred toggle. Changes last
+until reboot; adding/opening the tile never writes or establishes a boot policy.
+Android lifecycle, HyperOS tile display, background root and live registration
+need phone testing.
+
+Implementation follows [Android's TileService guidance](https://developer.android.com/develop/ui/views/quicksettings-tiles)
+and [API 34 PendingIntent launch requirements](https://developer.android.com/reference/android/service/quicksettings/TileService).
+LTE/NR RAT flags follow the [public libqmi NAS definitions](https://github.com/linux-mobile-broadband/libqmi/blob/main/src/libqmi-glib/qmi-enums-nas.h).
+
+The signed 0.13 package inspection confirms the protected exported tile service,
+5G drawable, long-press intent and tile transaction classes. Seven core Java
+suites, report/history and real localhost HTTP suites plus 52 native modem mock
+cases pass. This does not execute TileService/SystemUI on Android or establish
+HyperOS background root behavior.
