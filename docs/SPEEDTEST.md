@@ -1,7 +1,7 @@
 # Compare bands with Speedtest
 
-This feature is in the latest **source**, pending an approved APK build. The
-downloadable 0.10 APK does not include it yet. Phone validation is still needed.
+This feature is included in **SA Band Lab 0.11**. Phone validation is still
+needed; host/package checks do not prove Android cellular routing or accuracy.
 
 ## Run a test
 
@@ -117,4 +117,4 @@ filtering, report formatting, missing values, SIM filtering and latest-20
 retention. Android source compilation and a tiny 1 KB live endpoint smoke check
 pass. These do not execute Android connectivity services, AtomicFile storage,
 Location settings, lifecycle interactions or phone radio sampling. Those remain
-phone-validation work; no new APK has been built for this source update.
+phone-validation work. The feature is packaged in the 0.11 APK.

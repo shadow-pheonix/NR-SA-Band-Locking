@@ -17,9 +17,9 @@ meaningful checkpoint.
 
 ## Download the APK
 
-**[Download SA Band Lab 0.10 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.10.0/sa-band-lab-0.10-arm64.apk)**
+**[Download SA Band Lab 0.11 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.11.0/sa-band-lab-0.11-arm64.apk)**
 
-[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.10.0)
+[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.11.0)
 · [All releases](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases)
 
 Download the `.apk` file to install the app. GitHub's **Source code (zip)** is for
@@ -30,10 +30,11 @@ Tools** interface, a persistent SIM selector, retained draft selections and grou
 backup/recovery tools. [Preview the UI and navigation](docs/UI.md). The redesigned
 screens need phone testing; the confirmed manual modem operation below is from 0.9.
 
-### Upcoming source feature: Speedtest
+### Version 0.11: Speedtest and band history
 
-The source now adds **Overview / Bands / Speedtest / Tools**. The published
-0.10 APK above does not yet contain Speedtest; a new APK requires build approval.
+Version 0.11 adds **Overview / Bands / Speedtest / Tools**. Speedtest and Location
+settings prompts still need testing on the phone; host and package checks are
+separate from real Android routing and serving-cell evidence.
 
 After applying bands, open **Speedtest** to measure download, upload and
 **Ping (HTTP)**. Each run is saved locally with the SIM slot, timestamp and

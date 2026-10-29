@@ -1,8 +1,7 @@
 # UI and navigation redesign
 
 Version **0.10** packages the original three-tab redesign and launcher icon.
-The latest source adds **Speedtest between Bands and Tools**; it is pending a
-new approved APK build. Android rendering and device interaction still need
+Version **0.11** adds **Speedtest between Bands and Tools**. Android rendering and device interaction still need
 phone testing. Install official APK updates over the previous app to retain
 backups.
 
@@ -100,19 +99,19 @@ existing operation/controller boundary. The Android theme is in
 
 ## Validation and remaining checks
 
-The signed 0.10 APK build passes, including Java/D8 and full AAPT2 resource
+The signed 0.11 APK build passes, including Java/D8 and full AAPT2 resource
 linking. Package inspection confirms the adaptive/themed icon and theme. The original five Java
 host suites cover the existing observation/radio/journal/boot logic plus the
 new Apply gates, draft detection, mask labels, and fresh/stale/cached/neighbor
 presentation. No native helper protocol code changed. These checks do not
 execute Android views or prove runtime layout, focus order, launcher behavior,
-font scaling or navigation on the phone. Review those using the 0.10 APK.
+font scaling or navigation on the phone. Review those using the 0.11 APK.
 
 The speed-test source additionally passes transfer-loop and report/history host
 tests and Android Java compilation. A tiny live 1 KB download/upload smoke check
 passed against Cloudflare. Android cellular routing, Location settings prompts,
 serving updates, actual speed accuracy and lifecycle behavior still require a
-phone test; host mocks do not establish those results. No new APK was built.
+phone test; host mocks do not establish those results. Speedtest ships in 0.11.
 
 Android design references:
 [navigation patterns](https://developer.android.com/design/ui/mobile/guides/layout-and-content/layout-and-nav-patterns),
