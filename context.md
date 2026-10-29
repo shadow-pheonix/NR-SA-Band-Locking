@@ -19,11 +19,11 @@ history. Never publish credentials or private device identifiers here.
 - Public repository: <https://github.com/shadow-pheonix/NR-SA-Band-Locking>.
 - Canonical workspace: `/home/coder/NR-SA-Band-Locking`.
 - App/package: **SA Band Lab**, `dev.saband.lab`.
-- Latest completed build: **0.11**, version code **11**, name `0.11-sa-test`,
-  ARM64, minimum Android 11 / API 30, target API 34. Signed and checked;
-  publication is in progress. The previous public release 0.10 is unchanged.
-- Release target: [v0.11.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.11.0).
-- [0.11 APK download (after publication)](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.11.0/sa-band-lab-0.11-arm64.apk).
+- Latest published APK: **0.11**, version code **11**, name `0.11-sa-test`,
+  ARM64, minimum Android 11 / API 30, target API 34. Signed, checked and public
+  as an experimental prerelease. Previous releases remain unchanged.
+- Public release: [v0.11.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.11.0).
+- [0.11 APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.11.0/sa-band-lab-0.11-arm64.apk).
 - **Latest phone report confirms combined manual Apply of n78-only SA and
   NR-only mode, with successful modem readback.** It also confirms that the
   post-reboot stale-snapshot bug no longer blocks that operation.
@@ -44,7 +44,8 @@ history. Never publish credentials or private device identifiers here.
   The user explicitly requested “Build the apk”. Version 0.11 is now built
   with the existing signing identity. Seven Java/report suites and 50 native
   tests pass. Package/version, permissions, resources and certificate verified.
-  Public prerelease upload and anonymous download verification remain to finish.
+  APK/checksum published; anonymous public download matches the signed bytes.
+  README links to 0.11. No phone/emulator speed or serving-cell test is claimed.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
@@ -581,7 +582,8 @@ explicit build request authorizes packaging them in 0.11.
   no analytics/results endpoint, background testing or location coordinate calls.
 - Checks: Android javac passes; six pure Java suites pass (new transfer/band test),
   additional JSON roundtrip/history-format tests pass. Native protocol, backup
-  journal and boot transaction code unchanged, so no native rerun for this change.
+  journal and boot transaction code were unchanged at the source-only checkpoint.
+  The subsequent 0.11 build additionally reran all 50 native tests successfully.
   A tiny real endpoint smoke check returned HTTP 200 for 1,024-byte download and
   upload, not a speed/phone validation. Framework routing, location UI, persistent
   storage, accuracy and serving-cell updates still need a real phone test.
@@ -612,7 +614,11 @@ as the packaged version, with phone validation still pending.
 - No phone/emulator speed, routing, Location prompt, serving sampling or runtime
   UI validation is claimed. Prior tiny Cloudflare endpoint smoke check is not
   proof of speed accuracy or selected-SIM routing on Android.
-- Public prerelease assets: APK and SHA256SUMS.txt, publication in progress.
+- Published [v0.11.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.11.0),
+  prerelease, not draft; target source `844a87021b9fea43dddf270a751b068ff06e72bc`.
+  APK and SHA256SUMS.txt uploaded. Anonymous public APK download matched the
+  local signed bytes exactly; README download updated. This context completion
+  follows the tagged build source without changing the released APK.
 
 ## Approved 0.10 build checkpoint (2026-10-29)
 
@@ -794,10 +800,13 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-The approved 0.11 APK is built, signed and verified. Finish the new prerelease
-upload and anonymous download check, then publish source/context updates.
-Keep prior releases unchanged. Phone speed/routing/serving-cell and UI tests
-remain pending; future changes need a new explicit build approval.
+The approved 0.11 APK is built, signed, verified and published, including a
+matching anonymous public download and updated README link. Next, test Speedtest
+on the phone: chosen data SIM with Wi-Fi/VPN off, Location enabled, Phone/Precise
+location granted, applied bands and usable service. Inspect speed history for
+serving samples, rates, HTTP ping and timestamps; test Stop and Location prompts
+with the switch both on and off. No such real-device test has happened here.
+Future changes need a new explicit build approval.
 
 The approved 0.10 build/release is complete and the public APK download verified.
 Next, test native rendering/navigation, launcher appearance, font scale and
