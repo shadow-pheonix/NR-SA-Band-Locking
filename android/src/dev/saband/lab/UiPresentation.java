@@ -5,7 +5,7 @@ import java.util.ArrayList;
 
 /** UI decisions only: observing a cell and choosing a preference stay distinct. */
 public final class UiPresentation {
-    public static final int OVERVIEW=0, BANDS=1, TOOLS=2;
+    public static final int OVERVIEW=0, BANDS=1, SPEED=2, TOOLS=3, PAGE_COUNT=4;
     public static boolean canApply(boolean ready,boolean writeReady,boolean busy,int count,int mode) {
         return ready&&writeReady&&!busy&&count>0&&mode>0&&mode<128;
     }
@@ -35,7 +35,7 @@ public final class UiPresentation {
         }
         return nearby?"Nearby cell":older?"Older observation":"Not observed";
     }
-    public static String pageTitle(int page) {return page==BANDS?"Band selection":page==TOOLS?"Tools & recovery":"Network overview";}
+    public static String pageTitle(int page) {return page==BANDS?"Band selection":page==SPEED?"Speedtest":page==TOOLS?"Tools & recovery":"Network overview";}
     public static final class Network {
         public final String band, label, rsrp, sinr, nearby, detail;
         public final boolean recent;

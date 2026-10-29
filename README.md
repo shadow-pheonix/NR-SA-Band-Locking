@@ -30,6 +30,24 @@ Tools** interface, a persistent SIM selector, retained draft selections and grou
 backup/recovery tools. [Preview the UI and navigation](docs/UI.md). The redesigned
 screens need phone testing; the confirmed manual modem operation below is from 0.9.
 
+### Upcoming source feature: Speedtest
+
+The source now adds **Overview / Bands / Speedtest / Tools**. The published
+0.10 APK above does not yet contain Speedtest; a new APK requires build approval.
+
+After applying bands, open **Speedtest** to measure download, upload and
+**Ping (HTTP)**. Each run is saved locally with the SIM slot, timestamp and
+fresh serving-band samples during the test. Compare the last 20 runs; reports
+show unknown or observed band changes instead of assuming the selected band
+was serving. Both Start speed test and Refresh network offer **Open Location
+settings** only when the phone's Location switch is off.
+
+Use the selected SIM as the phone's mobile-data SIM, turn Wi-Fi/VPN off, and
+wait for service before testing. Each confirmed run uses up to **100 MB down +
+20 MB up** payload, plus overhead, against Cloudflare. **Stop test** cancels;
+leaving the app also stops it. Full instructions, privacy and measurement limits
+are in [the speed-test guide](docs/SPEEDTEST.md).
+
 ### Version 0.9: reboot fix and optional reapply
 
 Version 0.9 fixes an Apply failure after reboot: it uses freshly read

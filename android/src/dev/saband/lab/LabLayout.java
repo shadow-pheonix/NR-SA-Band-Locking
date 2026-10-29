@@ -11,12 +11,13 @@ import android.view.*;
 import android.widget.*;
 import java.util.ArrayList;
 
-/** Native three-destination shell. Views survive tab changes; no modem calls here. */
+/** Native navigation shell. Views survive tab changes; no modem calls here. */
 public final class LabLayout {
     public interface Actions {
         void selectSim(int slot);void read();void refreshNetwork();void apply();void restore();
         void selectAll();void clearAll();void copyReport();void exportBackup();void importBackup();
         void disableReapply();void frequencies();void efs();void networkSettings();void draftChanged();void statusDetails();
+        void startSpeed();void stopSpeed();void copySpeed();void clearSpeed();
     }
     public static final int BG=Color.rgb(10,16,24), SURFACE=Color.rgb(18,28,40), LINE=Color.rgb(37,51,66);
     public static final int INK=Color.rgb(235,241,248), MUTED=Color.rgb(154,174,193), MINT=Color.rgb(84,211,190), AMBER=Color.rgb(245,190,109);
@@ -27,9 +28,11 @@ public final class LabLayout {
     public final TextView status,current,radio,supported,modemRadio,bootStatus;
     public final Button apply,restore,selectAll,deselectAll;
     public final Switch nrOnly,persistLock;
+    public final Button startSpeed,stopSpeed,copySpeed,clearSpeed;
+    public final TextView speedStatus,speedHistory;
     private final FrameLayout pages;
-    private final View[] destinations=new View[3];private final ScrollView[] scrolls=new ScrollView[3];
-    private final LinearLayout[] navigation=new LinearLayout[3];private final TextView[] navLabels=new TextView[3];private final Glyph[] navIcons=new Glyph[3];
+    private final View[] destinations=new View[UiPresentation.PAGE_COUNT];private final ScrollView[] scrolls=new ScrollView[UiPresentation.PAGE_COUNT];
+    private final LinearLayout[] navigation=new LinearLayout[UiPresentation.PAGE_COUNT];private final TextView[] navLabels=new TextView[UiPresentation.PAGE_COUNT];private final Glyph[] navIcons=new Glyph[UiPresentation.PAGE_COUNT];
     private final Button[] sims=new Button[2];private final ProgressBar progress;
     private final TextView heroBand,heroLabel,heroDetail,rsrpValue,sinrValue,cellValue,nearbyValue,preferenceValue,backupValue,readHint,selectionTitle,selectionHint,draftLabel,deviceValue;
     private final TextView bandEmpty;
@@ -77,6 +80,7 @@ public final class LabLayout {
         LinearLayout preferences=card(overview);eyebrow(preferences,"MODEM PREFERENCE");preferenceValue=text(preferences,"Not read yet",20,INK,true);
         text(preferences,"A selected preference and a serving cell are different checks.",12,MUTED,false);
         navigationButton(preferences,"Manage SA bands",() -> showPage(UiPresentation.BANDS));
+        navigationButton(preferences,"Compare speeds",() -> showPage(UiPresentation.SPEED));
         LinearLayout details=card(overview);radio=text(details,"Refresh network to see serving and nearby cell details.",13,MUTED,false);radio.setTextIsSelectable(true);
         fold(details,"Cell details",radio,false);
 
@@ -104,6 +108,24 @@ public final class LabLayout {
         apply=button(footer,"Apply SA bands until reboot",true,callbacks::apply);
         if(activity.getResources().getConfiguration().screenHeightDp<540)bandContent.addView(footer);else bandsPage.addView(footer);
 
+        LinearLayout speed=scrollPage(UiPresentation.SPEED);heading(speed,"Speedtest","Apply a selection, then compare mobile-data performance.");
+        LinearLayout test=card(speed);eyebrow(test,"CELLULAR SPEED TEST");
+        speedStatus=text(test,"Ready when you are",22,INK,true);speedStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        text(test,"Download · Upload · Ping (HTTP)\nUses the selected mobile-data SIM. Turn Wi-Fi and VPN off. Apply or discard pending choices first.",13,MUTED,false);
+        text(test,"Up to 100 MB download + 20 MB upload payload per run, plus protocol overhead. About 30–60 seconds; slow requests can take longer. Cloudflare receives your IP address and test traffic. Band observations and reports stay on this phone.",12,MUTED,false);
+        navigationButton(test,"About the test provider",() -> {
+            try {activity.startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse("https://speed.cloudflare.com/about")));}
+            catch(Exception e) {Toast.makeText(activity,"Open speed.cloudflare.com/about in a browser.",Toast.LENGTH_LONG).show();}
+        });
+        startSpeed=button(test,"Start speed test",true,callbacks::startSpeed);
+        stopSpeed=baseButton("Stop test",false);stopSpeed.setOnClickListener(v -> callbacks.stopSpeed());test.addView(stopSpeed,buttonParams());stopSpeed.setVisibility(View.GONE);
+        text(test,"Serving bands are sampled during the test. If Location, permissions or fresh modem observations are unavailable, reports say unknown. Sampling does not prove the band stayed unchanged between observations.",12,MUTED,false);
+        LinearLayout history=card(speed);eyebrow(history,"COMPARE RECENT TESTS");
+        text(history,"Last 20 runs, stored locally. Only this SIM's runs appear here. Repeat tests in the same place; traffic load and radio conditions can change the result.",12,MUTED,false);
+        speedHistory=text(history,"No tests yet.",14,INK,false);speedHistory.setTextIsSelectable(true);
+        copySpeed=button(history,"Copy speed test reports",false,callbacks::copySpeed);
+        clearSpeed=button(history,"Clear all speed test history",false,callbacks::clearSpeed);
+
         LinearLayout tools=scrollPage(UiPresentation.TOOLS);heading(tools,"Tools & recovery","Keep your backup. Find details when you need them.");
         LinearLayout backups=card(tools);eyebrow(backups,"YOUR BACKUP");backupValue=text(backups,"No backup loaded",18,INK,true);
         text(backups,"Your original SA preferences stay saved on this phone. Export a copy before testing.",13,MUTED,false);
@@ -128,8 +150,8 @@ public final class LabLayout {
         text(tools,"SA Band Lab · experimental\nSA only · root required for modem control",12,MUTED,false);
 
         LinearLayout bottom=row();bottom.setPadding(dp(10),dp(6),dp(10),dp(6));bottom.setBackgroundColor(SURFACE);
-        String[] labels={"Overview","Bands","Tools"};
-        for(int i=0;i<3;i++) {
+        String[] labels={"Overview","Bands","Speedtest","Tools"};
+        for(int i=0;i<UiPresentation.PAGE_COUNT;i++) {
             final int target=i;LinearLayout item=column();item.setGravity(Gravity.CENTER);item.setMinimumHeight(dp(64));item.setPadding(dp(8),dp(6),dp(8),dp(6));
             Glyph icon=new Glyph(activity,i);item.addView(icon,new LinearLayout.LayoutParams(dp(42),dp(28)));
             TextView label=text(item,labels[i],11,MUTED,true);label.setGravity(Gravity.CENTER);label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -141,8 +163,8 @@ public final class LabLayout {
 
     public int page() {return page;}
     public void showPage(int next) {
-        int target=next<0||next>2?UiPresentation.OVERVIEW:next;boolean changed=target!=page;page=target;
-        for(int i=0;i<3;i++) {
+        int target=next<0||next>=UiPresentation.PAGE_COUNT?UiPresentation.OVERVIEW:next;boolean changed=target!=page;page=target;
+        for(int i=0;i<UiPresentation.PAGE_COUNT;i++) {
             destinations[i].animate().cancel();destinations[i].setAlpha(1f);
             destinations[i].setVisibility(i==page?View.VISIBLE:View.GONE);
             if(i==page&&changed) {destinations[i].setAlpha(0f);destinations[i].animate().alpha(1f).setDuration(140).start();}
@@ -250,6 +272,7 @@ public final class LabLayout {
             paint.setColor(active?MINT:MUTED);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(1.8f);paint.setStrokeCap(Paint.Cap.ROUND);paint.setStrokeJoin(Paint.Join.ROUND);
             if(kind==0) {canvas.drawRoundRect(3,3,21,21,5,5,paint);canvas.drawLine(7,15,7,17,paint);canvas.drawLine(12,10,12,17,paint);canvas.drawLine(17,7,17,17,paint);}
             else if(kind==1) {canvas.drawLine(4,7,20,7,paint);canvas.drawLine(4,17,20,17,paint);paint.setStyle(Paint.Style.FILL);canvas.drawCircle(9,7,3,paint);canvas.drawCircle(16,17,3,paint);}
+            else if(kind==UiPresentation.SPEED) {canvas.drawArc(3,5,21,23,180,180,false,paint);canvas.drawLine(12,14,18,8,paint);canvas.drawCircle(12,14,2,paint);}
             else {canvas.drawRoundRect(4,4,20,21,3,3,paint);canvas.drawLine(8,9,16,9,paint);canvas.drawLine(8,13,16,13,paint);canvas.drawLine(8,17,12,17,paint);}
             canvas.restore();
         }

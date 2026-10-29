@@ -1,26 +1,29 @@
 # UI and navigation redesign
 
-Version **0.10** packages this interface and the new launcher icon. Full Android
-rendering and device interaction still need phone testing. Install over the
-previous official APK to retain backups.
+Version **0.10** packages the original three-tab redesign and launcher icon.
+The latest source adds **Speedtest between Bands and Tools**; it is pending a
+new approved APK build. Android rendering and device interaction still need
+phone testing. Install official APK updates over the previous app to retain
+backups.
 
 ![UI design reference](assets/ui-overview.svg)
 
-The image is an illustrative design reference with example data, **not Android
+The image illustrates the earlier 0.10 three-tab layout with example data, **not Android
 screenshots or evidence of phone behavior**. The Bands panel is shown at the
 selection area; its read/backup card is above it in the scrollable page. The
 real grid contains only verified selectable bands for the chosen phone/SIM.
 
-## Three destinations
+## Four destinations in current source
 
 | Destination | Purpose and actions |
 | --- | --- |
 | **Overview** | Refresh Android cell observations; see the reported serving band, RSRP, SINR, NR cell count and nearby bands. Check modem preferences separately. Expand cell details when needed. |
 | **Bands** | Read live preferences and capture/verify the backup. Select SA bands in a responsive grid, use Select all or Clear selection, and stage NR-only/reboot options. Review the selection count and use the one Apply action. |
+| **Speedtest** | Run a confirmed cellular-only download/upload/HTTP-ping test. Stop a run, compare local reports for this SIM, copy reports or clear history. Every result carries serving-band observations from during the run. |
 | **Tools** | Export/import backups, restore captured SA preferences, disable boot reapply, copy diagnostics, inspect phone capabilities and open network settings. Optional modem-frequency and legacy EFS reads sit under Advanced modem checks. |
 
 The header keeps a two-button SIM selector visible. The bottom navigation keeps
-all three destinations one tap away. Pages retain their views and scroll state
+all four destinations one tap away. Pages retain their views and scroll state
 when switching tabs, so tab changes do not reset checkbox choices or initiate
 root/network operations. Back from Bands or Tools returns to Overview.
 
@@ -44,6 +47,16 @@ root/network operations. Back from Bands or Tools returns to Overview.
 - Restore keeps the captured-byte behavior and confirmation. It lives in Tools
   with an explanation that the current radio mode is preserved.
 
+## Speedtest and history
+
+See [SPEEDTEST.md](SPEEDTEST.md) for the beginner flow and measurement details.
+The source adds a four-stream cellular benchmark, explicit data-use confirmation,
+a Stop action and bounded local history. Unapplied band choices block testing.
+The selected SIM must be both the default and active data SIM; each HTTP request
+is pinned to the same cellular Network. Route/SIM changes fail the run.
+Results are labeled incomplete when cancelled or failed, retaining any completed
+measurements for diagnosis. The modem helper and backup protocol are unchanged.
+
 ## Clear observation and permission states
 
 Before a refresh, unknown values display a dash rather than fabricated numbers.
@@ -51,6 +64,11 @@ An actual empty cell list can report zero. Neighbor cells are never promoted to
 the serving-band hero. Cached results are labeled because they may contain
 other SIMs; sample ages continue to advance locally, without background modem
 queries. Samples older than 30 seconds become previous observations.
+
+On Refresh network or Start speed test, a disabled system Location switch
+triggers a dialog with **Open Location settings**. It opens Location settings;
+return and tap the action again. If Location is already enabled, no Location
+switch dialog appears. Permission prompts are separate and only shown if needed.
 
 Before requesting Phone/Precise location, the app explains Android's cell-info
 requirement and that the app does not request GPS coordinates or upload location.
@@ -83,12 +101,18 @@ existing operation/controller boundary. The Android theme is in
 ## Validation and remaining checks
 
 The signed 0.10 APK build passes, including Java/D8 and full AAPT2 resource
-linking. Package inspection confirms the adaptive/themed icon and theme. The five Java
+linking. Package inspection confirms the adaptive/themed icon and theme. The original five Java
 host suites cover the existing observation/radio/journal/boot logic plus the
 new Apply gates, draft detection, mask labels, and fresh/stale/cached/neighbor
 presentation. No native helper protocol code changed. These checks do not
 execute Android views or prove runtime layout, focus order, launcher behavior,
 font scaling or navigation on the phone. Review those using the 0.10 APK.
+
+The speed-test source additionally passes transfer-loop and report/history host
+tests and Android Java compilation. A tiny live 1 KB download/upload smoke check
+passed against Cloudflare. Android cellular routing, Location settings prompts,
+serving updates, actual speed accuracy and lifecycle behavior still require a
+phone test; host mocks do not establish those results. No new APK was built.
 
 Android design references:
 [navigation patterns](https://developer.android.com/design/ui/mobile/guides/layout-and-content/layout-and-nav-patterns),

@@ -34,19 +34,14 @@ history. Never publish credentials or private device identifiers here.
   registration or universal RF enforcement from preference readback alone.
 - Neighbor-band discovery remains unresolved. Android returned serving cells
   only; the experimental QMI frequency query is rejected by this firmware.
-- Latest request: **overhaul the UI and navigation; refine UI/UX**, following
-  the source-only icon task. A native three-page Overview / Bands / Tools shell
-  is implemented, with persistent SIM selection, retained tab views, staged
-  band/mode choices, a visible Apply footer and grouped recovery/advanced tools.
-  Android source/resource compilation and five Java host suites pass; the
-  illustrative design reference and controller wiring have been reviewed.
-  Native Android views have not been executed on a phone/emulator for this UI.
-  **The user explicitly requested “Build the apk”.** The 0.10 build includes
-  both icon and UI; same signing identity verified, all five Java suites and
-  50 native tests passed. Linked resources, package contents and version checked.
-  Release assets are public; an anonymous download exactly matches the signed
-  local APK. The published 0.9 APK is unchanged; no Android runtime rendering
-  test has been performed.
+- Latest request: **add an in-app speed test**, with a dedicated **Speedtest**
+  tab between Bands and Tools. Every report must record the serving band during
+  the speed test. Work in progress: cellular-only test on the chosen data SIM,
+  download/upload/HTTP latency, cancellable foreground run and local comparison
+  history with timestamped fresh serving observations and explicit unknowns.
+  Source implemented; Android compilation, six Java suites and report/history
+  checks pass, plus a tiny live endpoint check. Phone validation is pending.
+  No APK build authorized for this change; 0.10 remains the public binary.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
@@ -421,7 +416,7 @@ transport hooks are compiled out of the production ARM64 helper.
 | `PreferenceJournal.java` | Pure Java reconciliation of expected/pending state, immutable original SA/NSA and captured-mode handling |
 | `PreferenceStore.java` | Atomic JSON persistence, device binding, journal adapter and shared process-wide transaction lock |
 | `RadioModeSelection.java` | Resolve NR-only only when Apply is pressed; restore a known earlier mode when leaving NR-only |
-| `LabLayout.java` | Native Overview/Bands/Tools view hierarchy, navigation, responsive cards/grid and staged-control presentation |
+| `LabLayout.java` | Native Overview/Bands/Speedtest/Tools view hierarchy, navigation, responsive cards/grid and staged-control presentation |
 | `UiPresentation.java` | Pure Apply/draft/network display decisions, including stale/cached/unknown data handling |
 | `FiveGBands.java` | Render Android serving/unregistered NR observations without inventing detections |
 | `NrFrequencyPlan.java` | Supported-band-constrained frequency candidates, preserving overlaps |
@@ -496,8 +491,10 @@ The optional **Check original EFS path** button is read-only in the normal UI.
 `requestCellInfoUpdate` / `getAllCellInfo` requires precise location permission
 because cell identities can reveal location. The UI also asks for Phone
 permission. Enable system Location for this detection path if the firmware
-requires it. SA Band Lab does not request GPS coordinates or upload location;
-the manifest has no Internet permission. QMI preference reads and band Apply
+requires it. SA Band Lab does not request GPS coordinates or upload cell/location
+observations. Released 0.10 had no Internet permission; the new speed-test source
+adds INTERNET and ACCESS_NETWORK_STATE for explicit test traffic to Cloudflare.
+QMI preference reads and band Apply
 through root do not require this Android location permission. Denying it blocks
 Android cell observations, not the root-based lock operation.
 
@@ -525,6 +522,68 @@ Qualcomm NR DIAG ML1 measurement backend. A separate DIAG measurement backend is
 a possible research direction, not a working fallback. Do not display n28/n258
 as locally detected merely because the operator might deploy them or a mask
 contains their bits. This requested feature remains an open limitation.
+
+## Speed-test source feature (2026-10-29, unreleased)
+
+User requests: add a speed test after band selection, put **Speedtest between
+Bands and Tools**, include the actual serving band in every report and save
+band/download/upload/ping results to history. Prompt for system Location only
+if disabled, with an action opening Location settings, on both Refresh network
+and starting a speed test. These are implemented in source; no APK authorized.
+
+- Four tabs: Overview 0, Bands 1, Speedtest 2, Tools 3; PAGE_COUNT drives retained
+  views and saved scroll state. Added gauge glyph, progress, Stop, copy/clear
+  report controls and a compare-speeds shortcut.
+- `SpeedTestEngine.java`: independent Java HTTP implementation against Cloudflare
+  `/__down` and `/__up`; four streams, 10s per direction or 100,000,000 down /
+  20,000,000 up payload bytes. Three HTTP response-latency samples, median shown
+  as **Ping (HTTP)**, including DNS/connect/TLS where needed. Not ICMP or the
+  official Cloudflare browser methodology. No SDK or third-party code copied.
+- Speeds are average acknowledged upload / received download payload over phase
+  wall time, including connection/ramp overhead. Responses/status/encoding and
+  download length checked; redirects rejected. Upload bytes count towards speed
+  only after an OK response. Sub-2s samples explicitly labeled short. Approximate
+  path-to-server performance, not peak radio capability or proof a band is best.
+- `SpeedTestSession.java`: requires chosen subscription to be default and active
+  data SIM; active Network must be validated cellular and not Wi-Fi/VPN. All
+  requests use that Network's openConnection. Route checked before connections,
+  periodically during transfer and at the end; no process-wide bind or automatic
+  switch/fallback. No default URL.openConnection route. Phone testing pending.
+- Serving NR observations requested fresh for that subscription before latency,
+  before download, before upload and after transfer. Only registered NR entries
+  aged at most 5s populate the serving label. Each report stores timestamps,
+  per-phase samples/age/ARFCN/PCI/RSRP/RAT, sampled band union and observed changes.
+  Missing/stale/failed readings remain unknown, never inferred from selections
+  or stored preferences. This is sampling, not continuous enforcement monitoring
+  or a complete aggregation list. No IMSI/phone/operator identity is recorded.
+- `SpeedTestStore.java`: AtomicFile local history, latest 20 runs globally,
+  filtered by SIM in the UI. Saves completed, failed and stopped runs, preserving
+  completed metrics but marking incomplete outcomes. Copy contains readable text
+  and JSON; clear explicitly removes both slots' speed history only. History
+  persists app restart. General diagnostic report includes latest slot speed run.
+- MainActivity stages no modem changes for speed tests. Unapplied drafts block
+  Start; Apply/restore/SIM controls disabled during tests. Test and modem work
+  serialize on PreferenceStore.LOCK. Stop is nonblocking, cancellation closes
+  active sockets on worker; leaving/rotating/destroying activity requests stop.
+- System Location checked via LocationManager.isLocationEnabled. If off, dialog
+  opens ACTION_LOCATION_SOURCE_SETTINGS; after enabling, return and tap again.
+  Already-on switch triggers no such dialog. Phone/fine/coarse permission request
+  is separate and only requested when missing. Firmware can still omit bands;
+  never promise location enables fail-free cell reads. Denial blocks test startup
+  with serving reporting, not root band control.
+- Manifest adds INTERNET and ACCESS_NETWORK_STATE. Every run requires data-use
+  confirmation: up to 120 MB payload plus overhead. Cloudflare gets IP and test
+  traffic. Cell observations, backups, selections and reports are never posted;
+  no analytics/results endpoint, background testing or location coordinate calls.
+- Checks: Android javac passes; six pure Java suites pass (new transfer/band test),
+  additional JSON roundtrip/history-format tests pass. Native protocol, backup
+  journal and boot transaction code unchanged, so no native rerun for this change.
+  A tiny real endpoint smoke check returned HTTP 200 for 1,024-byte download and
+  upload, not a speed/phone validation. Framework routing, location UI, persistent
+  storage, accuracy and serving-cell updates still need a real phone test.
+- JVM JSON test jar is existing workspace org.json 20240303, not bundled; run
+  `tests/test_speed_reports.sh` with SA_ANDROID_JAR and SA_JSON_JAR. Detailed
+  method, privacy, limitations and primary sources: [docs/SPEEDTEST.md](docs/SPEEDTEST.md).
 
 ## Approved 0.10 build checkpoint (2026-10-29)
 
@@ -705,6 +764,10 @@ environment-status tool and `/etc/codex/network-policy.json` were unavailable
 here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
+
+The new speed-test source and checks are complete, awaiting build approval.
+Ask before a new APK as the user requested.
+Do not treat the earlier 0.10 build approval as approval of this new feature.
 
 The approved 0.10 build/release is complete and the public APK download verified.
 Next, test native rendering/navigation, launcher appearance, font scale and

@@ -103,3 +103,21 @@ bound to the device, firmware, baseband and signing-key-scoped Android ID.
 
 The SDK layout is the default. The extracted-tool override exists for isolated
 build environments; it does not download dependencies or publish credentials.
+
+## Speed-test source checks
+
+`tests/test_five_g_bands.sh` also runs the pure Java HTTP transfer/band-sampling
+policy tests. It uses fake connections and consumes no network data.
+
+Report/history formatting checks use a JVM `org.json` jar as a **test-only**
+dependency (for example the upstream `org.json:json:20240303` artifact):
+
+```sh
+SA_ANDROID_JAR="$ANDROID_HOME/platforms/android-34/android.jar" \
+SA_JSON_JAR=/path/to/json-20240303.jar \
+bash tests/test_speed_reports.sh
+```
+
+The APK continues using Android's built-in `org.json`; no external JSON jar or
+Cloudflare SDK is bundled. These checks do not build an APK or execute Android
+views, connectivity services or AtomicFile storage.

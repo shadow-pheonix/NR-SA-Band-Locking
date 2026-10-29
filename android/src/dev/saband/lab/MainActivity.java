@@ -7,6 +7,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.LocationManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -57,6 +58,9 @@ public class MainActivity extends Activity {
     private boolean restoredNr,restoredReboot;
     private int restoredBandScroll=-1;
     private long bandObservedElapsed=-1;
+    private SpeedTestSession speedSession;
+    private boolean speedRunning;
+    private JSONArray speedHistory=new JSONArray();
     private final Handler uiHandler=new Handler(Looper.getMainLooper());
     private final Runnable ageTick=new Runnable() {public void run() {if(alive) {refreshPresentation();refreshBandLabels();uiHandler.postDelayed(this,15000);}}};
 
@@ -81,6 +85,10 @@ public class MainActivity extends Activity {
             public void frequencies() {modemFrequencies();}
             public void efs() {checkLegacyEfs();}
             public void networkSettings() {openNetworkSettings();}
+            public void startSpeed() {confirmSpeedTest();}
+            public void stopSpeed() {stopSpeedTest();}
+            public void copySpeed() {copySpeedReports();}
+            public void clearSpeed() {clearSpeedHistory();}
             public void draftChanged() {if(!bindingUi)refreshEnabled();}
             public void statusDetails() {new AlertDialog.Builder(MainActivity.this).setTitle("Operation details").setMessage(status.getText()).setPositiveButton("Close",null).setNeutralButton("Copy report",(d,w) -> MainActivity.this.copyReport()).show();}
         });
@@ -94,7 +102,7 @@ public class MainActivity extends Activity {
             restoredBands=state.getIntArray("draft_bands");restoredNr=state.getBoolean("draft_nr");restoredReboot=state.getBoolean("draft_reboot");
             restoredBandScroll=state.getInt("scroll_"+UiPresentation.BANDS,0);
             screen.showPage(state.getInt("page",UiPresentation.OVERVIEW));
-            for(int page=0;page<3;page++)screen.restoreScroll(page,state.getInt("scroll_"+page,0));
+            for(int page=0;page<UiPresentation.PAGE_COUNT;page++)screen.restoreScroll(page,state.getInt("scroll_"+page,0));
             if(restoredBands!=null)status.setText("Read preferences again to restore your previous selection for review.");
         }
         refreshEnabled();
@@ -116,7 +124,7 @@ public class MainActivity extends Activity {
         supported.setText("Read preferences to load your phone's reported NR band support.");
         current.setText("No modem preferences read yet.");bootStatus.setText("Saved reboot plan: not checked.");
         status.setText("SIM "+(slot+1)+" · Read preferences to get started.");screen.setSlot(slot);
-        screen.showBandEmpty("Your selectable bands will appear after a successful read.");bindingUi=false;refreshEnabled();
+        screen.showBandEmpty("Your selectable bands will appear after a successful read.");bindingUi=false;loadSpeedHistory();refreshEnabled();
     }
     private void disableRebootReapply() {
         final int s=slot;
@@ -134,6 +142,71 @@ public class MainActivity extends Activity {
     private void openNetworkSettings() {
         try {startActivity(new Intent(android.provider.Settings.ACTION_NETWORK_OPERATOR_SETTINGS));}
         catch(Exception e) {startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS));}
+    }
+    /** Only interrupt the user's flow when the system Location switch is actually off. */
+    private boolean requireLocationEnabled() {
+        LocationManager location=getSystemService(LocationManager.class);
+        if(location!=null&&location.isLocationEnabled())return true;
+        new AlertDialog.Builder(this).setTitle("Enable Location for serving bands")
+            .setMessage("Turn on Location so Android can provide the serving band. Return to Band Lab and tap the action again. The app does not request GPS coordinates.")
+            .setNegativeButton("Cancel",null).setPositiveButton("Open Location settings",(d,w) -> {
+                try {startActivity(new Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS));}
+                catch(Exception e) {status.setText("Open your phone's Settings → Location and enable Location, then retry.");}
+            }).show();return false;
+    }
+    private void confirmSpeedTest() {
+        if(busy)return;
+        if(hasDraft()||restoredBands!=null) {status.setText("Apply or discard your pending band choices before testing speed.");return;}
+        if(!requireLocationEnabled())return;
+        if(checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED||checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
+            new AlertDialog.Builder(this).setTitle("Serving band in speed reports")
+                .setMessage("Android needs Phone and Precise location permission to read this SIM's serving band. Band observations stay in your local speed reports; they are not sent to the speed server.")
+                .setNegativeButton("Cancel",null).setPositiveButton("Continue",(d,w) -> requestPermissions(new String[]{Manifest.permission.READ_PHONE_STATE,Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},8)).show();return;
+        }
+        new AlertDialog.Builder(this).setTitle("Test SIM "+(slot+1)+" mobile-data speed?")
+            .setMessage("Make SIM "+(slot+1)+" your mobile-data SIM. Turn Wi-Fi and VPN off and wait for service after Apply.\n\nUses up to 100 MB download + 20 MB upload payload, plus network overhead. Cloudflare receives your IP address and test traffic. The app keeps results and serving-band observations locally.\n\nHTTP latency and end-to-end speed are approximate. The test does not change modem preferences. It stops if you leave the app.")
+            .setNegativeButton("Cancel",null).setPositiveButton("Start test",(d,w) -> startSpeedTest()).show();
+    }
+    private void startSpeedTest() {
+        if(busy||hasDraft()||restoredBands!=null||!requireLocationEnabled())return;
+        final int s=slot;final String preference=probe==null?"not read":bandNames(probe.optString("sa_hex"));
+        speedRunning=true;busy=true;screen.showPage(UiPresentation.SPEED);status.setText("Testing SIM "+(s+1)+" mobile-data speed…");
+        screen.speedStatus.setText("Checking mobile-data connection…");refreshEnabled();
+        final SpeedTestSession session=new SpeedTestSession(getApplicationContext(),s,text -> ui(() -> screen.speedStatus.setText(text)));speedSession=session;
+        worker.execute(() -> {
+            try {
+                JSONObject result;
+                synchronized(PreferenceStore.LOCK) {result=session.run(preference);}
+                String saveError="";
+                try {SpeedTestStore.add(this,result);}catch(Exception e) {saveError=" History could not be saved: "+e.getMessage();}
+                final String warning=saveError;final JSONObject finished=result;
+                ui(() -> {
+                    loadSpeedHistory();screen.speedStatus.setText(finished.optBoolean("complete")?"Test complete":finished.optBoolean("cancelled")?"Test stopped":"Test failed / incomplete");
+                    if(!warning.isEmpty())screen.speedHistory.setText(SpeedTestStore.render(new JSONArray().put(finished),s)+warning);
+                    status.setText((finished.optBoolean("complete")?"Speed test saved. Serving bands (sampled): "+finished.optString("serving_bands_sampled","unknown"):finished.optString("error","Speed test incomplete."))+warning);
+                });
+            } catch(Exception e) {ui(() -> {screen.speedStatus.setText("Test failed");status.setText("Speed test: "+e.getMessage());});}
+            finally {ui(() -> {speedSession=null;speedRunning=false;busy=false;refreshEnabled();});}
+        });
+    }
+    private void stopSpeedTest() {
+        SpeedTestSession session=speedSession;if(session!=null)session.cancel();
+        screen.speedStatus.setText("Stopping test…");
+    }
+    private void loadSpeedHistory() {
+        try {speedHistory=SpeedTestStore.read(this);screen.speedHistory.setText(SpeedTestStore.render(speedHistory,slot));}
+        catch(Exception e) {speedHistory=new JSONArray();screen.speedHistory.setText("Could not read speed history. Clear history to start fresh. "+e.getMessage());}
+    }
+    private void copySpeedReports() {
+        JSONArray selected=new JSONArray();for(int i=0;i<speedHistory.length();i++) {JSONObject r=speedHistory.optJSONObject(i);if(r!=null&&r.optInt("slot",-1)==slot)selected.put(r);}
+        if(selected.length()==0) {Toast.makeText(this,"No reports for this SIM",Toast.LENGTH_SHORT).show();return;}
+        String text=SpeedTestStore.render(selected,slot)+"\n\nJSON\n"+selected.toString();
+        ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("SA Band Lab speed reports",text));Toast.makeText(this,"Speed reports copied",Toast.LENGTH_SHORT).show();
+    }
+    private void clearSpeedHistory() {
+        if(busy)return;
+        new AlertDialog.Builder(this).setTitle("Clear all speed reports?").setMessage("Deletes local speed-test history for both SIM slots. Backups and band preferences are kept.")
+            .setNegativeButton("Cancel",null).setPositiveButton("Clear history",(d,w) -> {SpeedTestStore.clear(this);loadSpeedHistory();}).show();
     }
     private boolean ready() {return probe!=null&&probe.optBoolean("ok")&&backup!=null&&matchesDevice(backup);}
     private int selectedCount() {int count=0;for(CheckBox band:bands)if(band.isChecked())count++;return count;}
@@ -162,12 +235,12 @@ public class MainActivity extends Activity {
     }
     @Override protected void onSaveInstanceState(Bundle state) {
         super.onSaveInstanceState(state);state.putInt("slot",slot);state.putInt("page",screen.page());
-        for(int page=0;page<3;page++)state.putInt("scroll_"+page,screen.scrollY(page));
+        for(int page=0;page<UiPresentation.PAGE_COUNT;page++)state.putInt("scroll_"+page,screen.scrollY(page));
         if(ready()) {state.putIntArray("draft_bands",selectedBands());state.putBoolean("draft_nr",nrOnly.isChecked());state.putBoolean("draft_reboot",persistLock.isChecked());}
         else if(restoredBands!=null) {state.putIntArray("draft_bands",restoredBands);state.putBoolean("draft_nr",restoredNr);state.putBoolean("draft_reboot",restoredReboot);}
     }
     @Override protected void onResume() {super.onResume();uiHandler.removeCallbacks(ageTick);uiHandler.post(ageTick);}
-    @Override protected void onPause() {uiHandler.removeCallbacks(ageTick);super.onPause();}
+    @Override protected void onPause() {uiHandler.removeCallbacks(ageTick);if(speedRunning)stopSpeedTest();super.onPause();}
     private void refreshEnabled() {
         for(Button b:actions)b.setEnabled(!busy);
         for(CheckBox b:bands) {b.setEnabled(!busy);b.setAlpha(busy?0.55f:1f);}
@@ -180,6 +253,9 @@ public class MainActivity extends Activity {
         if(deselectAll!=null)deselectAll.setEnabled(!busy&&ready&&!bands.isEmpty());
         if(apply!=null)apply.setEnabled(UiPresentation.canApply(ready,probe!=null&&probe.optBoolean("write_ready"),busy,selectedCount(),probe==null?-1:probe.optInt("rat_mode_preference",-1)));
         if(restore!=null)restore.setEnabled(!busy&&ready);
+        screen.startSpeed.setEnabled(!busy&&!hasDraft()&&restoredBands==null);
+        screen.stopSpeed.setVisibility(speedRunning?android.view.View.VISIBLE:android.view.View.GONE);
+        screen.stopSpeed.setEnabled(speedRunning);
         for(Button b:actions)b.setAlpha(b.isEnabled()?1f:0.42f);
         refreshPresentation();
     }
@@ -351,7 +427,7 @@ public class MainActivity extends Activity {
         Toast.makeText(this,"Report copied",Toast.LENGTH_SHORT).show();
     }
     private String report() {
-        JSONObject r=new JSONObject();try {r.put("app","SA Band Lab 0.10");r.put("model",Build.MODEL);r.put("android",Build.VERSION.RELEASE);r.put("fingerprint",Build.FINGERPRINT);r.put("baseband",baseband());r.put("slot",slot);r.put("helper_result",lastHelperResult==null?lastReport:lastHelperResult);if(lastChange!=null)r.put("last_preference_change",lastChange);r.put("reapply_after_reboot_enabled",activeBootPlan!=null);if(activeBootPlan!=null)r.put("boot_reapply_plan",activeBootPlan);if(lastBootResult!=null)r.put("last_boot_reapply",lastBootResult);if(lastEfsResult!=null)r.put("efs_diagnostic",lastEfsResult);r.put("serving_state",radio.getText());if(lastBandObservation!=null)r.put("five_g_observation",lastBandObservation);if(lastModemFrequencies!=null)r.put("modem_frequencies",lastModemFrequencies);if(backup!=null)r.put("backup",backup);return r.toString(2);}catch(Exception e) {return lastReport;}
+        JSONObject r=new JSONObject();try {r.put("app","SA Band Lab 0.10");r.put("model",Build.MODEL);r.put("android",Build.VERSION.RELEASE);r.put("fingerprint",Build.FINGERPRINT);r.put("baseband",baseband());r.put("slot",slot);r.put("helper_result",lastHelperResult==null?lastReport:lastHelperResult);if(lastChange!=null)r.put("last_preference_change",lastChange);r.put("reapply_after_reboot_enabled",activeBootPlan!=null);if(activeBootPlan!=null)r.put("boot_reapply_plan",activeBootPlan);if(lastBootResult!=null)r.put("last_boot_reapply",lastBootResult);if(lastEfsResult!=null)r.put("efs_diagnostic",lastEfsResult);r.put("serving_state",radio.getText());if(lastBandObservation!=null)r.put("five_g_observation",lastBandObservation);if(lastModemFrequencies!=null)r.put("modem_frequencies",lastModemFrequencies);if(backup!=null)r.put("backup",backup);for(int i=0;i<speedHistory.length();i++) {JSONObject test=speedHistory.optJSONObject(i);if(test!=null&&test.optInt("slot",-1)==slot) {r.put("latest_speed_test",test);break;}}return r.toString(2);}catch(Exception e) {return lastReport;}
     }
     private void exportBackups() {
         Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"sa-band-lab-backup.json");startActivityForResult(i,100);
@@ -419,6 +495,7 @@ public class MainActivity extends Activity {
         for(long arfcn:unique)text.append("NR-ARFCN ").append(arfcn).append(" · ").append(NrFrequencyPlan.label(arfcn,capabilities)).append("\n");
     }
     private void servingState() {
+        if(busy||!requireLocationEnabled())return;
         if(checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED||checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
             new AlertDialog.Builder(this).setTitle("Read cellular observations?")
                 .setMessage("Android requires Phone and Precise location permission to expose serving and nearby cells. Cell identities can reveal location. This app does not request GPS coordinates or upload location. Root-based band control works without these permissions.")
@@ -469,13 +546,15 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(request,permissions,grants);
         if(request==7&&grants.length==3&&grants[0]==0&&grants[1]==0)servingState();
         else if(request==7)status.setText("Serving-state permission was not granted. Preference operations remain available.");
+        else if(request==8&&grants.length==3&&grants[0]==0&&grants[1]==0)confirmSpeedTest();
+        else if(request==8)status.setText("Phone and Precise location permission are needed for speed reports with serving-band observations.");
     }
     @Override public void onBackPressed() {
         if(screen.page()!=UiPresentation.OVERVIEW) {screen.showPage(UiPresentation.OVERVIEW);return;}
-        if(busy) {Toast.makeText(this,"Wait for the modem operation to finish.",Toast.LENGTH_SHORT).show();return;}
+        if(busy) {Toast.makeText(this,speedRunning?"Use Stop test in Speedtest to stop the transfer.":"Wait for the modem operation to finish.",Toast.LENGTH_SHORT).show();return;}
         if(hasDraft())new AlertDialog.Builder(this).setTitle("Leave without applying?").setMessage("Your current choices have not been applied. The modem will not be changed.")
                 .setNegativeButton("Keep editing",null).setPositiveButton("Leave",(d,w) -> finish()).show();
         else super.onBackPressed();
     }
-    @Override protected void onDestroy() {alive=false;uiHandler.removeCallbacks(ageTick);worker.shutdown();super.onDestroy();}
+    @Override protected void onDestroy() {if(speedSession!=null)speedSession.cancel();alive=false;uiHandler.removeCallbacks(ageTick);worker.shutdown();super.onDestroy();}
 }
