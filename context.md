@@ -19,11 +19,11 @@ history. Never publish credentials or private device identifiers here.
 - Public repository: <https://github.com/shadow-pheonix/NR-SA-Band-Locking>.
 - Canonical workspace: `/home/coder/NR-SA-Band-Locking`.
 - App/package: **SA Band Lab**, `dev.saband.lab`.
-- Latest public release remains 0.9 while **0.10 is built, signed and verified**
-  for publication. Version code **10**, name `0.10-sa-test`, ARM64, minimum
+- Latest public release: **0.10**, built, signed, verified and published as an
+  experimental prerelease. Version code **10**, name `0.10-sa-test`, ARM64, minimum
   Android 11 / API 30, target API 34.
-- New release target: [v0.10.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.10.0).
-- [0.10 APK download (after publication)](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.10.0/sa-band-lab-0.10-arm64.apk).
+- Public release: [v0.10.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.10.0).
+- [0.10 APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.10.0/sa-band-lab-0.10-arm64.apk).
 - **Latest phone report confirms combined manual Apply of n78-only SA and
   NR-only mode, with successful modem readback.** It also confirms that the
   post-reboot stale-snapshot bug no longer blocks that operation.
@@ -44,8 +44,9 @@ history. Never publish credentials or private device identifiers here.
   **The user explicitly requested “Build the apk”.** The 0.10 build includes
   both icon and UI; same signing identity verified, all five Java suites and
   50 native tests passed. Linked resources, package contents and version checked.
-  Release upload/public download verification remain in progress. The published
-  0.9 APK is unchanged; no Android runtime rendering test has been performed.
+  Release assets are public; an anonymous download exactly matches the signed
+  local APK. The published 0.9 APK is unchanged; no Android runtime rendering
+  test has been performed.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
@@ -544,7 +545,11 @@ uses the same certificate as 0.9; install over the old app to retain backups.
   packaged README and notices/licenses checked. The old 0.9 APK hash is unchanged.
 - Android native-view rendering, navigation gestures, launcher appearance and
   font scaling are not runtime-tested; no phone/emulator was available.
-- Release publication and anonymous-download verification are the next step.
+- Published [v0.10.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.10.0),
+  prerelease (not draft), target source `b266f3ec21f19317abb791b1f4a09de4e0bd1618`.
+  APK and `SHA256SUMS.txt` uploaded; anonymous public download matches exactly.
+  README download and beginner navigation instructions updated. This context
+  publication checkpoint follows the tagged source without altering its APK.
 
 ## Release and signing record
 
@@ -701,10 +706,11 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-The approved 0.10 build is complete and validated. Finish the prerelease upload,
-public download check and source publication, then update this context. Phone
-rendering/navigation remain unverified by host checks. Do not overwrite 0.9 or
-restart NSA development. Future source changes need a new explicit build request.
+The approved 0.10 build/release is complete and the public APK download verified.
+Next, test native rendering/navigation, launcher appearance, font scale and
+existing manual Apply/restore on the phone. Host checks cannot establish these
+results. Do not overwrite existing releases or restart NSA development. Future
+source changes need a new explicit build request.
 
 If the user wants a reboot reapply test, have them enable **Reapply after
 reboot** before a successful Apply, keep root granted, reboot/unlock, allow
