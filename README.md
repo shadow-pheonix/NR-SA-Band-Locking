@@ -1,5 +1,7 @@
 # NR SA Band Locking — SA Band Lab
 
+![SA Band Lab icon](docs/assets/app-icon.svg)
+
 An open-source Android app for selecting **5G Standalone (SA) bands** on rooted
 Qualcomm phones. It reads live modem preferences, saves the original values and
 applies selected SA bands and an optional NR-only mode until reboot, with an
@@ -22,6 +24,9 @@ meaningful checkpoint.
 
 Download the `.apk` file to install the app. GitHub's **Source code (zip)** is for
 developers and cannot be installed as an Android app.
+
+The source includes a new adaptive radio-lock launcher icon with a themed-icon
+variant. It is pending the next APK build; the published 0.9 APK is unchanged.
 
 ### Version 0.9: reboot fix and optional reapply
 

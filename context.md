@@ -1,6 +1,6 @@
 # SA Band Lab: session context and handoff
 
-Last updated: **2026-10-28 UTC**.
+Last updated: **2026-10-29 UTC**.
 
 This file preserves the project's decisions, research, implementation, device
 feedback and operating details so a fresh session can continue without the
@@ -34,9 +34,12 @@ history. Never publish credentials or private device identifiers here.
   registration or universal RF enforcement from preference readback alone.
 - Neighbor-band discovery remains unresolved. Android returned serving cells
   only; the experimental QMI frequency query is rejected by this firmware.
-- No new APK or code change is requested by this handoff task. The user asked
-  to create this file and mandate frequent updates. Do not rebuild 0.9 for a
-  documentation-only update or replace the already-published artifact.
+- Latest request: **add a good app icon**. Source now includes an original
+  mint radio-lock design on a dark navy gradient, adaptive round/square masks
+  and a monochrome themed layer. The manifest and build pipeline reference it.
+  Icon resources compile and preview checks are complete; **no new APK has been
+  built or authorized for this request yet**. Ask about the build after review.
+  The published 0.9 artifact remains unchanged and does not contain the icon.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
@@ -68,6 +71,8 @@ Requested product behavior:
 - Make the project open source at the repository above, with APK assets in
   GitHub Releases, a direct README download link, beginner instructions, tested
   phone/root details, plausible SoC candidates and unsupported-device limits.
+- Give the app a recognizable launcher icon. The 2026-10-29 source update adds
+  an original mint padlock with radio-wave arcs, matching the navy/mint UI.
 
 The user asked about combining both SIMs' download speed, then said **leave it**.
 No bonding/multipath feature is planned. They also asked how much of the result
@@ -218,6 +223,42 @@ again before SET. True concurrent changes still refuse; there is no automatic
 write retry to override them. Explicit no-write results cancel staged intent;
 uncertain writes retain pending targets until a successful live read resolves
 the outcome. The last mutation trace remains available after later reads.
+
+### Unreleased launcher icon update (2026-10-29)
+
+The user asked for a good app icon. The app previously declared no launcher
+icon and had no `android/res` resources. The new artwork is an original vector
+radio-lock mark: mint lock body, pale shackle and outer waves, mint inner waves,
+and a dark navy gradient background. It remains clear at launcher thumbnail
+size and is not derived from Cellular Pro or an external icon pack.
+
+Source files:
+
+- `android/res/drawable/ic_launcher_background.xml`
+- `android/res/drawable/ic_launcher_foreground.xml`
+- `android/res/drawable/ic_launcher_monochrome.xml`
+- `android/res/mipmap-anydpi-v26/ic_launcher.xml`
+- `android/res/mipmap-anydpi-v33/ic_launcher.xml`
+- `docs/assets/app-icon.svg` (review/README preview using the foreground paths)
+
+The manifest's application icon and roundIcon both reference
+`@mipmap/ic_launcher`. Android 11/12 use the adaptive foreground/background;
+API 33+ can also use the monochrome layer for themed icons. Vector layers use
+a 108 dp viewport, with central artwork kept within the adaptive safe region.
+`build.sh` now runs AAPT2 compile on `android/res` and passes the resource archive
+to AAPT2 link. No Java resource constants are needed by the current UI.
+
+Validation completed: all five icon XML resources compiled with the installed
+AAPT2, manifest/resource references and vector path consistency were checked,
+and squircle, circular, themed and 48 px previews were visually reviewed.
+Build-script syntax checks passed. No APK was linked, signed or released for
+this change, and no phone/launcher result is claimed. The local preview is
+`build/icon-preview/launcher-preview.png` (ignored); the SVG is committed.
+Future artwork edits should update both Android vectors and the SVG preview.
+
+The next approved build must use a new version code/release identifier rather
+than replacing the existing 0.9 APK/tag. Version fields have not been bumped
+by this source-only artwork task. Preserve the prior signing identity.
 
 ## Latest user-supplied 0.9 evidence
 
@@ -456,6 +497,8 @@ Zig 0.13.0; it has no Gradle project. `build.sh` builds a static ARM64 helper,
 compiles Java, runs D8/aapt2, packages notices, zipaligns, signs and verifies.
 The ARM64 helper has 16 KiB load alignment. Preserve the existing signing key
 for official upgrades; self-generated keys cannot update the official app.
+The source-only icon update additionally compiles and links `android/res` so
+the launcher resources are actually included when the next APK is authorized.
 
 ### Last completed checks
 
@@ -470,6 +513,10 @@ for official upgrades; self-generated keys cannot update the official app.
   compiler notes are expected; there was no compile error.
 - The new 0.9 APK was signature/content-checked and downloaded from its public
   release URL with an identical hash. Phone evidence is described separately.
+- 2026-10-29 icon-only source checks: AAPT2 compilation of all five icon XML
+  resources, build-script syntax, resource references, vector/SVG consistency
+  and visual previews. The released 0.9 APK hash is unchanged. Full package
+  linking and launcher validation are pending approval for a new APK build.
 
 Run relevant checks after changes; do not rerun everything or build an APK just
 because a handoff document changed. Host mock tests may need permission to open
@@ -556,8 +603,11 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-There is no active request to modify the app or build another APK. Continue
-from new user feedback; avoid restarting completed research or NSA work.
+The launcher icon source update is ready for review; **ask whether to build
+the next APK** as the user requested previously. No build is authorized merely
+by the artwork request. Once a build is approved, assign a new version/code,
+verify linked launcher resources and signing compatibility, and follow the
+existing release workflow. Do not overwrite 0.9 or restart NSA development.
 
 If the user wants a reboot reapply test, have them enable **Reapply after
 reboot** before a successful Apply, keep root granted, reboot/unlock, allow

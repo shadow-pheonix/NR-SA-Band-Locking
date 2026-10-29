@@ -56,7 +56,9 @@ dist/artifacts.json
 
 The script compiles the C helper for `aarch64-linux-musl` as a static PIE with
 16 KiB load alignment, compiles Java, runs D8 and aapt2, packages licenses, aligns
-the APK, signs it and verifies the signature. Minimum Android API is 30.
+the APK, signs it and verifies the signature. It compiles `android/res` with
+AAPT2 and links those resources, including the adaptive/themed launcher icons,
+into the base package. Minimum Android API is 30.
 
 ## Signing and upgrades
 

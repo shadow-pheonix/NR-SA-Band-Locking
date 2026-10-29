@@ -54,7 +54,8 @@ with zipfile.ZipFile(root/'build/classes.jar', 'w') as z:
         z.write(p, str(p.relative_to(root/'build/classes')))
 PY
 "$java_cmd" -cp "$d8_jar" com.android.tools.r8.D8 --min-api 30 --lib "$android_jar" --output "$here/build/dex" "$here/build/classes.jar"
-"$aapt" link --manifest "$here/android/AndroidManifest.xml" -I "$android_jar" --min-sdk-version 30 --target-sdk-version 34 -o "$here/build/base.apk"
+"$aapt" compile --dir "$here/android/res" -o "$here/build/resources.zip"
+"$aapt" link --manifest "$here/android/AndroidManifest.xml" -I "$android_jar" --min-sdk-version 30 --target-sdk-version 34 -o "$here/build/base.apk" "$here/build/resources.zip"
 python3 "$here/package_apk.py"
 LD_LIBRARY_PATH="$sdk_tools:$sdk_tools/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$zipalign" -f 4 "$here/build/unsigned.apk" "$here/build/aligned.apk"
 
