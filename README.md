@@ -17,17 +17,18 @@ meaningful checkpoint.
 
 ## Download the APK
 
-**[Download SA Band Lab 0.9 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.9.0/sa-band-lab-0.9-arm64.apk)**
+**[Download SA Band Lab 0.10 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.10.0/sa-band-lab-0.10-arm64.apk)**
 
-[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.9.0)
+[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.10.0)
 · [All releases](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases)
 
 Download the `.apk` file to install the app. GitHub's **Source code (zip)** is for
 developers and cannot be installed as an Android app.
 
-The source includes a new launcher icon and a redesigned **Overview / Bands /
-Tools** interface. [Preview the UI and navigation](docs/UI.md). These changes
-are pending the next approved APK build; the published 0.9 APK is unchanged.
+Version **0.10** includes a new launcher icon and a redesigned **Overview / Bands /
+Tools** interface, a persistent SIM selector, retained draft selections and grouped
+backup/recovery tools. [Preview the UI and navigation](docs/UI.md). The redesigned
+screens need phone testing; the confirmed manual modem operation below is from 0.9.
 
 ### Version 0.9: reboot fix and optional reapply
 
@@ -68,7 +69,7 @@ Backup imports do not enable automatic reapply.
 
 - Reads separate live SA/NSA preferences and hardware-supported NR bands.
 - Saves a device- and firmware-bound backup before changing preferences.
-- Offers individual band checkboxes plus **Select all / Deselect all**.
+- Offers individual band checkboxes plus **Select all / Clear selection**.
 - Stages the **NR only (5G)** checkbox alongside the band selection.
 - Applies both choices with **Apply SA bands until reboot**, in one modem SET.
 - Optionally reapplies the verified bands and radio mode after boot and unlock.
@@ -96,6 +97,7 @@ add unsupported bands, force carrier aggregation or combine two SIMs' speeds.
 | Version 0.8 post-reboot Apply | User reported `stale_snapshot`: modem returned to original bands while the app retained the previous n78 expectation. Fixed in 0.9; subsequent manual Apply from the broad original state succeeded on the phone. |
 | Version 0.9 manual Apply | Phone report confirms one combined SET and verified n78-only SA plus NR-only mode; original backup and NSA preference preserved. Serving-cell refresh was not included. |
 | Version 0.9 reboot reapply | Built and host-tested; Android boot delivery and unattended root access need phone validation. |
+| Version 0.10 interface | New icon and Overview / Bands / Tools navigation; signed build and host checks, phone rendering still unverified. |
 | Neighbor discovery | Android returned only the serving cell; the additional modem query was rejected as **DeviceUnsupported (0x0019)** |
 
 Successful preference readback proves that the modem reports the requested
@@ -165,18 +167,18 @@ n78 support but does not report n258 support.
    available. Official APK updates use the same signing certificate.
 4. Open the app and choose the SIM containing your 5G SA subscription. **SIM 1 ·
    slot 0** means the first SIM slot; SIM 2 is slot 1.
-5. Tap **Read live SA preferences + backup**. When your root manager prompts,
+5. Open **Bands** and tap **Read live preferences**. When your root manager prompts,
    grant root to SA Band Lab. This read does not change band preferences.
-6. Wait for the successful read. Tap **Export backups** and save the JSON file
+6. Wait for the successful read. Open **Tools**, tap **Export backups** and save the JSON file
    somewhere you can find it later. Keep it on the same device/firmware.
 
-If reading fails, stop at that stage and use **Copy diagnostic report** to report
+If reading fails, stop at that stage and open **Tools** and use **Copy diagnostic report** to report
 the failure. Do not replace a missing backup with values from another phone.
 
 ### Select bands and apply NR-only together
 
 1. Ensure the chosen SIM has mobile data enabled and usable 5G SA coverage.
-2. Choose bands from the checkboxes. Use **Deselect all bands**, then tick the
+2. Open **Bands** and choose bands from the checkboxes. Use **Clear selection**, then tick the
    band(s) you want, such as n78 when you know n78 is available locally.
 3. Leave **NR only (5G)** unticked to keep the current non-NR-only mode. Tick it
    if you want to request 5G only, with no LTE fallback.
@@ -194,7 +196,7 @@ NR-only removes LTE fallback, so calls and service depend on network support.
 
 ### Check the current band
 
-Tap **Refresh detected 5G bands**. Grant **Phone** and **Precise location**
+Open **Overview** and tap **Refresh network**. Grant **Phone** and **Precise location**
 permissions and enable the phone's Location service if prompted.
 
 - **Serving** identifies a registered cell reported by Android.
@@ -204,8 +206,7 @@ permissions and enable the phone's Location service if prompted.
 - Check the observation's age and whether the app used cached data.
 
 **Not observed does not mean unavailable.** The tested firmware returned only
-the serving n78 cell. The experimental **Read modem neighbor frequencies · root**
-query also failed on this phone with **DeviceUnsupported (0x0019)**. This release
+the serving n78 cell. The experimental modem-frequency query under **Tools → Advanced modem checks** also failed on this phone with **DeviceUnsupported (0x0019)**. This release
 does not provide an exhaustive scan of all nearby 5G bands.
 
 ### Undo changes
@@ -213,7 +214,7 @@ does not provide an exhaustive scan of all nearby 5G bands.
 - To leave NR-only mode: **untick NR only**, choose the desired bands and press
   **Apply SA bands until reboot**. The app restores the earlier radio mode it
   captured. If no earlier mode is known, it refuses to guess one.
-- To restore the original SA band mask: tap **Restore captured SA preferences**.
+- To restore the original SA band mask: open **Tools** and tap **Restore captured SA preferences**.
   This disables reboot reapply for that SIM slot and keeps the current radio
   mode; it does not apply a pending checkbox choice.
 - Before uninstalling, restore the settings you want and retain your exported

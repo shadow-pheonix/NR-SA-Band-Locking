@@ -19,11 +19,11 @@ history. Never publish credentials or private device identifiers here.
 - Public repository: <https://github.com/shadow-pheonix/NR-SA-Band-Locking>.
 - Canonical workspace: `/home/coder/NR-SA-Band-Locking`.
 - App/package: **SA Band Lab**, `dev.saband.lab`.
-- Latest published APK: **0.9**, Android version code **9**, version name
-  `0.9-sa-test`, ARM64, minimum Android 11 / API 30, target API 34.
-- [0.9 release](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.9.0)
-  is public and marked experimental/prerelease, not draft.
-- [Direct APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.9.0/sa-band-lab-0.9-arm64.apk).
+- Latest public release remains 0.9 while **0.10 is built, signed and verified**
+  for publication. Version code **10**, name `0.10-sa-test`, ARM64, minimum
+  Android 11 / API 30, target API 34.
+- New release target: [v0.10.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.10.0).
+- [0.10 APK download (after publication)](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.10.0/sa-band-lab-0.10-arm64.apk).
 - **Latest phone report confirms combined manual Apply of n78-only SA and
   NR-only mode, with successful modem readback.** It also confirms that the
   post-reboot stale-snapshot bug no longer blocks that operation.
@@ -41,8 +41,11 @@ history. Never publish credentials or private device identifiers here.
   Android source/resource compilation and five Java host suites pass; the
   illustrative design reference and controller wiring have been reviewed.
   Native Android views have not been executed on a phone/emulator for this UI.
-  **No new APK is built or authorized.** The icon and UI are pending a reviewed,
-  newly versioned build; the published 0.9 APK is unchanged.
+  **The user explicitly requested “Build the apk”.** The 0.10 build includes
+  both icon and UI; same signing identity verified, all five Java suites and
+  50 native tests passed. Linked resources, package contents and version checked.
+  Release upload/public download verification remain in progress. The published
+  0.9 APK is unchanged; no Android runtime rendering test has been performed.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
@@ -230,7 +233,7 @@ write retry to override them. Explicit no-write results cancel staged intent;
 uncertain writes retain pending targets until a successful live read resolves
 the outcome. The last mutation trace remains available after later reads.
 
-### Unreleased launcher icon update (2026-10-29)
+### Launcher icon source update (2026-10-29)
 
 The user asked for a good app icon. The app previously declared no launcher
 icon and had no `android/res` resources. The new artwork is an original vector
@@ -262,15 +265,14 @@ this change, and no phone/launcher result is claimed. The local preview is
 `build/icon-preview/launcher-preview.png` (ignored); the SVG is committed.
 Future artwork edits should update both Android vectors and the SVG preview.
 
-The next approved build must use a new version code/release identifier rather
-than replacing the existing 0.9 APK/tag. Version fields have not been bumped
-by this source-only artwork task. Preserve the prior signing identity.
+The subsequent approved build uses 0.10 / code 10, preserving the prior signing
+identity and leaving the existing 0.9 APK/tag intact.
 
-### Unreleased UI/navigation overhaul (2026-10-29)
+### UI/navigation source overhaul (2026-10-29)
 
 The user then asked to overhaul the UI and navigation and refine UI/UX, rather
-than approving the icon APK build. Both the icon and this redesign remain
-source-only and must ship together in the next explicitly approved build.
+than approving the icon APK build. Both initially remained
+source-only; the subsequent explicit build request now includes them in 0.10.
 
 `LabLayout.java` now owns a native three-destination interface with an inset-safe
 header, launcher mark, two-button SIM selector, status/progress area and bottom
@@ -418,8 +420,8 @@ transport hooks are compiled out of the production ARM64 helper.
 | `PreferenceJournal.java` | Pure Java reconciliation of expected/pending state, immutable original SA/NSA and captured-mode handling |
 | `PreferenceStore.java` | Atomic JSON persistence, device binding, journal adapter and shared process-wide transaction lock |
 | `RadioModeSelection.java` | Resolve NR-only only when Apply is pressed; restore a known earlier mode when leaving NR-only |
-| `LabLayout.java` | Unreleased native Overview/Bands/Tools view hierarchy, navigation, responsive cards/grid and staged-control presentation |
-| `UiPresentation.java` | Unreleased pure Apply/draft/network display decisions, including stale/cached/unknown data handling |
+| `LabLayout.java` | Native Overview/Bands/Tools view hierarchy, navigation, responsive cards/grid and staged-control presentation |
+| `UiPresentation.java` | Pure Apply/draft/network display decisions, including stale/cached/unknown data handling |
 | `FiveGBands.java` | Render Android serving/unregistered NR observations without inventing detections |
 | `NrFrequencyPlan.java` | Supported-band-constrained frequency candidates, preserving overlaps |
 | `BootPlans.java`, `BootPolicy.java`, `BootReapply.java` | Opt-in per-slot plans, bounded retry policy and testable boot transaction |
@@ -523,6 +525,27 @@ a possible research direction, not a working fallback. Do not display n28/n258
 as locally detected merely because the operator might deploy them or a mask
 contains their bits. This requested feature remains an open limitation.
 
+## Approved 0.10 build checkpoint (2026-10-29)
+
+The user explicitly authorized building the completed icon and UI. Version/code,
+report and QMI helper labels are now 0.10 / 10; the wire protocol is unchanged.
+Beginner README instructions now follow Overview / Bands / Tools. Official build
+uses the same certificate as 0.9; install over the old app to retain backups.
+
+- APK: `sa-band-lab-0.10-arm64.apk`, **120,300 bytes**.
+- APK SHA-256: `191ff3cd6f9dc889e811cf08e205ec05913510d82d6ec7c769d2ce6865b49afb`.
+- Helper SHA-256: `9ac787f81dcaf1d34ef98fc706dc7543003d2c5da9ad1ee72dad87c6a9aeb545`.
+- AAPT2 full linking, Java compilation, D8, zipalign, v3 signing and signature
+  verification passed; code 10, API 30/34 and ARM64 metadata checked.
+- Certificate matches the historical SHA-256 in the signing record below.
+- All five Java host suites, 50 native mock methods and transport checks pass.
+- APK ZIP integrity, exact production ARM64 helper, no mock-transport switch,
+  new UI/boot classes in DEX, adaptive v26/v33 resources, theme references,
+  packaged README and notices/licenses checked. The old 0.9 APK hash is unchanged.
+- Android native-view rendering, navigation gestures, launcher appearance and
+  font scaling are not runtime-tested; no phone/emulator was available.
+- Release publication and anonymous-download verification are the next step.
+
 ## Release and signing record
 
 | Item | Value |
@@ -566,8 +589,8 @@ Zig 0.13.0; it has no Gradle project. `build.sh` builds a static ARM64 helper,
 compiles Java, runs D8/aapt2, packages notices, zipaligns, signs and verifies.
 The ARM64 helper has 16 KiB load alignment. Preserve the existing signing key
 for official upgrades; self-generated keys cannot update the official app.
-The source-only icon update additionally compiles and links `android/res` so
-the launcher resources are actually included when the next APK is authorized.
+The icon update compiles and links `android/res`; the 0.10 package now includes
+the adaptive and themed launcher resources and native UI theme.
 
 ### Last completed checks
 
@@ -587,11 +610,11 @@ the launcher resources are actually included when the next APK is authorized.
   release URL with an identical hash. Phone evidence is described separately.
 - 2026-10-29 icon-only source checks: AAPT2 compilation of all five icon XML
   resources, build-script syntax, resource references, vector/SVG consistency
-  and visual previews. The released 0.9 APK hash is unchanged. Full package
-  linking and launcher validation are pending approval for a new APK build.
+  and visual previews. The released 0.9 APK hash is unchanged. These were source-only checks; full package linking passed in the approved
+  0.10 build. Launcher rendering still needs a phone check.
 - The subsequent UI source check compiles all six XML resources (icons plus
   theme), compiles the Android Java sources and reviews an illustrative design
-  board. Android runtime/view tests and full APK linking remain pending.
+  board. Full APK linking subsequently passed in 0.10; Android runtime/view tests remain pending.
 
 Run relevant checks after changes; do not rerun everything or build an APK just
 because a handoff document changed. Host mock tests may need permission to open
@@ -678,12 +701,10 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-The launcher icon and UI/navigation source updates are ready for review;
-**ask whether to build the next APK** as the user requested previously. No build
-is authorized merely by the artwork or UI request. Once approved, assign a new
-version/code, verify linked launcher/theme resources, native UI rendering and
-navigation on Android, signing compatibility, and follow the existing release
-workflow. Do not overwrite 0.9 or restart NSA development.
+The approved 0.10 build is complete and validated. Finish the prerelease upload,
+public download check and source publication, then update this context. Phone
+rendering/navigation remain unverified by host checks. Do not overwrite 0.9 or
+restart NSA development. Future source changes need a new explicit build request.
 
 If the user wants a reboot reapply test, have them enable **Reapply after
 reboot** before a successful Apply, keep root granted, reboot/unlock, allow

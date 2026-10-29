@@ -1,9 +1,8 @@
 # UI and navigation redesign
 
-This is an **unreleased source update**, alongside the new launcher icon.
-The downloadable 0.9 APK still has the earlier interface. No new APK has been
-built for this redesign; full Android rendering and device interaction remain
-to be checked after the user approves a new build.
+Version **0.10** packages this interface and the new launcher icon. Full Android
+rendering and device interaction still need phone testing. Install over the
+previous official APK to retain backups.
 
 ![UI design reference](assets/ui-overview.svg)
 
@@ -83,12 +82,13 @@ existing operation/controller boundary. The Android theme is in
 
 ## Validation and remaining checks
 
-Android Java compilation and AAPT2 resource compilation pass. The five Java
+The signed 0.10 APK build passes, including Java/D8 and full AAPT2 resource
+linking. Package inspection confirms the adaptive/themed icon and theme. The five Java
 host suites cover the existing observation/radio/journal/boot logic plus the
 new Apply gates, draft detection, mask labels, and fresh/stale/cached/neighbor
 presentation. No native helper protocol code changed. These checks do not
 execute Android views or prove runtime layout, focus order, launcher behavior,
-font scaling or navigation on the phone. Review those in the next approved APK.
+font scaling or navigation on the phone. Review those using the 0.10 APK.
 
 Android design references:
 [navigation patterns](https://developer.android.com/design/ui/mobile/guides/layout-and-content/layout-and-nav-patterns),

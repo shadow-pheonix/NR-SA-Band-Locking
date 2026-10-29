@@ -3,8 +3,8 @@ import hashlib
 import json
 
 root = Path(__file__).resolve().parent
-files = ['sa-band-lab-0.9-arm64.apk', 'sa-helper-arm64']
-data = {'version': '0.9-sa-test', 'package': 'dev.saband.lab',
+files = ['sa-band-lab-0.10-arm64.apk', 'sa-helper-arm64']
+data = {'version': '0.10-sa-test', 'package': 'dev.saband.lab',
         'device_tested': False, 'abi': 'arm64-v8a', 'min_android_api': 30,
         'files': {name: {'sha256': hashlib.sha256((root/'dist'/name).read_bytes()).hexdigest(),
                          'bytes': (root/'dist'/name).stat().st_size} for name in files}}
