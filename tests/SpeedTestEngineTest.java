@@ -13,7 +13,8 @@ public final class SpeedTestEngineTest {
         public void phase(String p) {}public void progress(String p,long b,long n) {}
     };
     private static final class Endpoint implements SpeedTestEngine.Connections {
-        volatile boolean failDownload,failUpload,truncated,compressed,html,timeoutUpload;
+        volatile boolean failDownload,failUpload,truncated,compressed,html,timeoutUpload,timeoutLatency,holdLatency,holdLatencyClose;
+        final AtomicBoolean releaseLatency=new AtomicBoolean();final CountDownLatch latencyEntered=new CountDownLatch(1);
         volatile long delayMillis,uploadResponseMillis;final AtomicLong sent=new AtomicLong(),received=new AtomicLong(),largestUpload=new AtomicLong();
         final AtomicInteger downloadRequests=new AtomicInteger();final CountDownLatch uploading=new CountDownLatch(1);
         final CountDownLatch downloading=new CountDownLatch(1);
@@ -23,6 +24,11 @@ public final class SpeedTestEngineTest {
                 final boolean upload=url.getPath().equals("/__up");
                 final long size=upload?0:Long.parseLong(url.getQuery().split("&")[0].substring(6));
                 @Override public int getResponseCode() throws IOException {
+                    if(!upload&&size==0) {
+                        latencyEntered.countDown();
+                        while(holdLatency&&!releaseLatency.get()) {try {Thread.sleep(10);}catch(InterruptedException ignored) {}}
+                        if(timeoutLatency)throw new SocketTimeoutException("mock latency timeout");
+                    }
                     if(upload) {
                         uploading.countDown();
                         if(timeoutUpload||uploadResponseMillis>getReadTimeout())throw new SocketTimeoutException("mock response timeout");
@@ -55,7 +61,10 @@ public final class SpeedTestEngineTest {
                         public void write(byte[] b,int off,int len) throws IOException {if(disconnected)throw new IOException("Disconnected");sent.addAndGet(len);}
                     };
                 }
-                public void connect() {}public boolean usingProxy() {return false;}public void disconnect() {disconnected=true;}
+                public void connect() {}public boolean usingProxy() {return false;}public void disconnect() {
+                    disconnected=true;
+                    while(!upload&&size==0&&holdLatencyClose&&!releaseLatency.get()) {try {Thread.sleep(10);}catch(InterruptedException ignored) {}}
+                }
             };
         }
     }
@@ -68,7 +77,7 @@ public final class SpeedTestEngineTest {
         check(Math.abs(new SpeedTestEngine.Rate(1000000,1000000000,false).mbps()-8)<0.0001);
         for(int mode=0;mode<4;mode++) {
             e=new Endpoint();e.failDownload=mode==0;e.truncated=mode==1;e.compressed=mode==2;e.html=mode==3;
-            SpeedTestEngine.Result bad=engine(e).run();check(!bad.complete()&&!bad.error.isEmpty()&&bad.download==null&&bad.upload==null&&e.sent.get()==0);
+            SpeedTestEngine.Result bad=engine(e).run();check(!bad.complete()&&!bad.error.isEmpty()&&bad.download==null&&bad.upload!=null&&e.sent.get()>0);
         }
         e=new Endpoint();e.failUpload=true;SpeedTestEngine.Result partial=engine(e).run();
         check(!partial.complete()&&partial.download!=null&&partial.upload==null&&partial.sentBytes<=20003);
@@ -77,6 +86,32 @@ public final class SpeedTestEngineTest {
         check(timeout.download!=null&&timeout.latencyMs>=0&&timeout.upload==null&&!timeout.cancelled);
         check(timeout.failedPhase.equals("Upload")&&timeout.errorType.equals("SocketTimeoutException")&&timeout.error.contains("Upload request timed out"));
         check(timeout.uploadAcknowledgedBytes==0); // Sent bytes are not an upload-speed result.
+        e=new Endpoint();e.timeoutLatency=true;SpeedTestEngine.Result noPing=engine(e).run();
+        check(!noPing.complete()&&noPing.throughputComplete()&&noPing.latencyMs<0&&noPing.latencyAttempts==3&&noPing.latencyValidSamples==0);
+        check(noPing.download!=null&&noPing.upload!=null&&noPing.failedPhase.equals("Latency"));
+        check(noPing.failures.size()==1&&noPing.failures.get(0).requests.size()==3);
+        check(noPing.failures.get(0).requests.get(0).operation.equals("response_headers_including_connect_tls"));
+        e=new Endpoint();e.holdLatency=true;
+        long began=System.nanoTime();SpeedTestEngine.Result stuck;
+        try {stuck=new SpeedTestEngine(e,() -> {},QUIET,new SpeedTestEngine.Config(100003,20003,1000,4,200,100)).run();}
+        finally {e.releaseLatency.set(true);}
+        check(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-began)<2000);
+        check(stuck.throughputComplete()&&stuck.latencyMs<0&&stuck.latencyAttempts==1&&stuck.errorType.equals("TimeoutException"));
+        e=new Endpoint();e.holdLatencyClose=true;
+        try {SpeedTestEngine.Result cleanup=engine(e).run();check(cleanup.complete()&&cleanup.latencyValidSamples==3);}
+        finally {e.releaseLatency.set(true);}
+        e=new Endpoint();e.timeoutLatency=true;e.failDownload=true;
+        SpeedTestEngine.Result twoErrors=engine(e).run();check(twoErrors.failures.size()==2&&twoErrors.upload!=null&&twoErrors.download==null&&!twoErrors.throughputComplete());
+        final Endpoint tlsEndpoint=new Endpoint();
+        SpeedTestEngine.Connections tlsFailure=url -> {
+            if(url.getQuery()!=null&&url.getQuery().startsWith("bytes=0&"))throw new javax.net.ssl.SSLHandshakeException("mock TLS failure");
+            return tlsEndpoint.open(url);
+        };
+        SpeedTestEngine.Result tlsResult=new SpeedTestEngine(tlsFailure,() -> {},QUIET,new SpeedTestEngine.Config(1000,1000,1000,2)).run();
+        check(tlsResult.throughputComplete()&&tlsResult.errorType.equals("SSLHandshakeException"));
+        check(tlsResult.failures.get(0).requests.get(0).operation.equals("open_connection"));
+        SpeedTestEngine.Result routeResult=new SpeedTestEngine(url -> {throw new SpeedTestEngine.AbortException("Data SIM changed");},() -> {},QUIET,new SpeedTestEngine.Config(1000,1000,1000,2)).run();
+        check(routeResult.aborted&&routeResult.latencyAttempts==1&&routeResult.download==null&&routeResult.upload==null);
         e=new Endpoint();e.uploadResponseMillis=3200;
         SpeedTestEngine.Result slowResponse=new SpeedTestEngine(e,() -> {},QUIET,new SpeedTestEngine.Config(1000,40000,5000,4)).run();
         check(slowResponse.complete()&&slowResponse.upload.bytes==40000&&slowResponse.uploadAcknowledgedBytes==40000);
@@ -102,10 +137,14 @@ public final class SpeedTestEngineTest {
         executor=Executors.newSingleThreadExecutor();future=executor.submit(() -> stopUpload.run());check(stalled.uploading.await(2,TimeUnit.SECONDS));
         stopUpload.cancel();SpeedTestEngine.Result cancelledUpload=future.get(2,TimeUnit.SECONDS);executor.shutdownNow();
         check(cancelledUpload.cancelled&&cancelledUpload.download!=null&&cancelledUpload.upload==null);
+        e=new Endpoint();e.holdLatency=true;final Endpoint stoppedLatency=e;final SpeedTestEngine cancelPing=engine(e);
+        executor=Executors.newSingleThreadExecutor();future=executor.submit(() -> cancelPing.run());check(stoppedLatency.latencyEntered.await(2,TimeUnit.SECONDS));
+        try {cancelPing.cancel();SpeedTestEngine.Result stopPing=future.get(2,TimeUnit.SECONDS);check(stopPing.cancelled&&stopPing.download==null&&stopPing.upload==null);}
+        finally {stoppedLatency.releaseLatency.set(true);executor.shutdownNow();}
         e=new Endpoint();SpeedTestEngine preCancelled=engine(e);preCancelled.cancel();check(preCancelled.run().cancelled&&e.received.get()==0);
         e=new Endpoint();AtomicInteger guards=new AtomicInteger();
         SpeedTestEngine lost=new SpeedTestEngine(e,() -> {if(guards.incrementAndGet()>5)throw new IOException("SIM changed");},QUIET,new SpeedTestEngine.Config(100000,10000,1000,1));
-        SpeedTestEngine.Result failed=lost.run();check(!failed.complete()&&failed.error.contains("SIM changed"));
+        SpeedTestEngine.Result failed=lost.run();check(!failed.complete()&&failed.aborted&&failed.error.contains("SIM changed")&&failed.upload==null);
         check(SpeedTestBands.serving(new int[]{78},false,0).length==0);
         check(SpeedTestBands.serving(new int[]{78},true,-1).length==0);
         check(SpeedTestBands.serving(new int[]{78},true,5001).length==0);

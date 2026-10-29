@@ -35,6 +35,11 @@ public final class SpeedTestReportsTest {
         check(!shown.contains("↑ 0.0")&&shown.contains("Upload acknowledged: 0.0 MB"));
         check(SpeedTestStore.outcome(new JSONObject()).equals("Failed"));
         check(SpeedTestStore.outcome(new JSONObject().put("cancelled",true).put("complete",true)).equals("Stopped"));
+        JSONObject noPing=report(0,"n78","not read");noPing.put("complete",false);noPing.put("http_latency_ms",JSONObject.NULL);noPing.put("throughput_complete",true);
+        noPing.put("latency_attempts",1);noPing.put("latency_valid_samples",0);noPing.put("error","Latency request timed out.");noPing.put("failed_phase","Latency");
+        check(SpeedTestStore.outcome(noPing).equals("Speeds measured · ping unavailable"));
+        shown=SpeedTestStore.render(new JSONArray().put(noPing),0);check(shown.contains("450.3 Mbps")&&shown.contains("41.2 Mbps")&&shown.contains("Ping (HTTP): —")&&shown.contains("HTTP ping samples: 0 / 1"));
+        noPing.put("aborted",true);check(!SpeedTestStore.outcome(noPing).startsWith("Speeds measured"));
         System.out.println("Speed history checks passed: serving versus selected bands, roundtrip, download/upload/ping, samples, missing values, SIM filtering, short runs and latest-20 retention.");
     }
 }

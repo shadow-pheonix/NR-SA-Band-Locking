@@ -4,6 +4,13 @@ This guide describes **SA Band Lab 0.12**, which includes the meter, timed tests
 and revised timeout handling. The older 0.11 APK used a fixed 100/20 MB cutoff
 and shorter response timeout. Phone validation of the new behavior is pending.
 
+**Unreleased follow-up source:** a 0.12 phone report then failed during the
+latency phase after about six seconds, before any data transfer. Source now
+isolates latency, download and upload: an unavailable ping does not prevent
+speed measurement, and one endpoint failure does not skip the other direction.
+Stop and disallowed/changed SIM or network remain fatal. This fix is pending a
+new approved APK build and phone validation; it is not in the 0.12 download.
+
 The user's 0.11 phone report confirms a completed download around **266 Mbps**,
 HTTP response latency around **79 ms** and fresh **n78** serving observations.
 Upload timed out and has no valid rate in that report. Version 0.12 revises
@@ -49,8 +56,10 @@ silently measuring another connection. OEM routing still needs phone testing.
 
 ## What each history entry includes
 
-- Date/time, SIM slot, chosen duration, and Complete / Partial results / Stopped /
-  Failed status. A timeout identifies the failing phase/type in new reports.
+- Date/time, SIM slot, chosen duration, and outcome. The new source shows
+  **Speeds measured · ping unavailable** when both rate phases finish without
+  a ping; otherwise Complete / Partial results / Stopped / Failed. Missing
+  ping stays a dash, not zero. A timeout identifies its phase/type.
 - **Serving bands (sampled)** during that run, including observed changes or
   unknown samples. This is independent of checked bands and modem preferences.
 - Download/upload in **Mbps**, **Ping (HTTP)** in milliseconds, and payload usage.
@@ -92,9 +101,12 @@ The app independently implements HTTP requests against Cloudflare's published
 speed-test endpoints. It does not bundle Cloudflare's SDK or implement its full
 browser benchmark methodology. It is not affiliated with Cloudflare or Ookla.
 
-- **Ping (HTTP)** is the median of three HTTP response-latency measurements to
+- **Ping (HTTP)** is the median of the returned HTTP response-latency measurements to
   the download endpoint with a zero-byte body. It includes connection/TLS/DNS
-  setup when needed; it is not ICMP ping or radio latency alone.
+  setup when needed; it is not ICMP ping or radio latency alone. The new source
+  tries at most three probes within one eight-second budget, with five-second
+  socket timeouts, and records attempted/valid samples. Failure leaves ping
+  unavailable but allows speed phases to run on the same approved cellular route.
 - Download and upload use up to four concurrent streams, each direction ending
   after **20 or 60 seconds**, unless stopped or failed. Download requests repeat
   in pieces up to 25 MB. Upload starts with 250 KB requests and adapts between
@@ -108,7 +120,8 @@ browser benchmark methodology. It is not affiliated with Cloudflare or Ookla.
   measurements, an ISP dispute benchmark or a universal best-band ranking.
 - HTTP errors, compressed/unexpected downloads, truncated bodies and route
   changes produce failures. A failed phase is not presented as a valid rate.
-  Completed earlier measurements remain labeled **Partial results**. Sent
+  Successful measurements from independent phases are retained. Endpoint errors
+  are isolated; Stop or SIM/network changes terminate the run. Sent
   upload bytes and server-acknowledged bytes are reported separately; sending
   data alone does not establish upload speed. Response reads have up to 15
   seconds and transfer connections up to 10 seconds within the phase deadline,
@@ -150,3 +163,26 @@ for the old version. These do not validate the new timed engine or meter on
 Android. Connectivity services, AtomicFile storage, Location settings, lifecycle,
 radio sampling and visual rendering still require phone validation for this
 0.12 update. Build/package validation is separate from phone validation.
+
+## Diagnosing a failed phase in the next source update
+
+New reports include `phase_failures`, `latency_attempts`, `latency_valid_samples`,
+`throughput_complete` and `aborted`. Each failed phase snapshots up to eight
+recent requests with endpoint/method, operation, elapsed time, HTTP status when
+received and exception type. No full URLs/nonce values, headers or tokens are
+stored. The normal result remains separate from detailed diagnostic information.
+
+`response_headers_including_connect_tls` means the call was awaiting response
+headers, including connection setup; it does not distinguish DNS, TCP, TLS,
+carrier or server delays. `open_connection`, `opening_upload_stream`,
+`sending_upload`, `reading_response_body` and `closing_connection` identify other
+positions. An outer deadline is reported as `TimeoutException` rather than a
+generic I/O error. A blocked ping or its cleanup cannot occupy data-phase workers.
+
+`tests/test_speed_http.sh` exercises real localhost HTTP I/O: deliberately delayed
+zero-byte probes, download/upload despite missing ping, HTTP 503 with the other
+direction still running, and Stop during an active probe. The unit tests also
+cover a fake provider ignoring interruption, blocked disconnect and TLS failures.
+These checks pass, along with Android source compilation and the other seven
+host suites/checks. They do not prove phone TLS/QRTR/carrier routing, server
+availability, or a successful real-world upload. No new APK is built by these checks.

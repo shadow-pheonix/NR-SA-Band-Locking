@@ -30,6 +30,7 @@ public final class SpeedTestStore {
     public static String outcome(JSONObject report) {
         if(report.optBoolean("cancelled"))return "Stopped";
         if(report.optBoolean("complete"))return "Complete";
+        if(report.optBoolean("throughput_complete")&&!report.optBoolean("aborted")&&report.isNull("http_latency_ms")&&report.optJSONObject("download")!=null&&report.optJSONObject("upload")!=null)return "Speeds measured · ping unavailable";
         if(report.optJSONObject("download")!=null||report.optJSONObject("upload")!=null||
             report.has("http_latency_ms")&&!report.isNull("http_latency_ms"))return "Partial results";
         return "Failed";
@@ -52,6 +53,16 @@ public final class SpeedTestStore {
             }
             if(!r.optString("error").isEmpty())out.append("\n").append(r.optString("error"));
             if(!r.optString("failed_phase").isEmpty())out.append("\nIncomplete phase: ").append(r.optString("failed_phase"));
+            if(r.has("latency_attempts"))out.append("\nHTTP ping samples: ").append(r.optInt("latency_valid_samples")).append(" / ").append(r.optInt("latency_attempts"));
+            JSONArray failures=r.optJSONArray("phase_failures");if(failures!=null)for(int n=0;n<failures.length();n++) {
+                JSONObject failure=failures.optJSONObject(n);if(failure==null)continue;JSONArray requests=failure.optJSONArray("recent_requests");
+                if(requests!=null)for(int k=0;k<requests.length();k++) {
+                    JSONObject request=requests.optJSONObject(k);if(request==null)continue;
+                    out.append("\n").append(failure.optString("phase")).append(" request: ").append(request.optString("operation"))
+                        .append(" · ").append(request.optLong("elapsed_ms")).append(" ms");
+                    if(!request.isNull("http_status"))out.append(" · HTTP ").append(request.optInt("http_status"));
+                }
+            }
             if(r.has("duration_per_direction_s"))out.append("\nTimed test: ").append(r.optInt("duration_per_direction_s")).append("s per direction");
             if(r.has("upload_acknowledged_bytes"))out.append(String.format(Locale.ROOT,"\nUpload acknowledged: %.1f MB (sent bytes alone do not establish upload speed)",r.optLong("upload_acknowledged_bytes")/1000000.0));
             out.append("\nCloudflare · cellular HTTP average; sampled serving bands may omit aggregated carriers.");

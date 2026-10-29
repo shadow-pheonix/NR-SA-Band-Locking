@@ -29,31 +29,23 @@ history. Never publish credentials or private device identifiers here.
   post-reboot fresh-baseline fix. The newer 0.11 report is a speed test only.
 - **Automatic reboot reapply has not been phone-tested.** The latest report has
   `reapply_after_reboot_enabled: false`; it contains no boot reapply evidence.
-- The latest 0.11 speed report contains fresh registered n78 observations at
-  all four phase boundaries and Android data RAT NR. This establishes sampled
-  serving observations for that run, not continuous RF enforcement or a lock.
-- Neighbor-band discovery remains unresolved. Android returned serving cells
-  only; the experimental QMI frequency query is rejected by this firmware.
-- Latest user report: **0.11 speed test showed failed**. Phone completed a
-  100 MB download at about 266 Mbps and HTTP latency about 79 ms, with fresh
-  registered n78 samples at all four phase boundaries. Upload sent about 6 MB
-  before a timeout roughly 3s into the phase; upload rate absent. This confirms
-  phone download/latency and serving sampling on that run, not a complete test
-  or any band Apply (the report contains no root preference read).
-- Follow-up source now implements: response timeouts up to 15s within a bounded
-  timed phase, smaller adaptive upload chunks and explicit **Partial results**
-  with failing phase/type and acknowledged upload bytes. User then requested
-  longer tests without fixed data limits: **20s or extended 60s per direction**,
-  confirmed data-use warning (potentially several GB), repeating download requests
-  and adaptive uploads. They also supplied a congested-screen screenshot and
-  requested a speedometer. New native animated meter, result tiles, collapsed
-  explanations and compact expandable history are implemented. Seven Java/report
-  suites and Android source compilation pass; illustrative meter reference reviewed;
-  the user explicitly requested **“Build the latest apk”**. Version 0.12 is
-  built and signed with the existing identity. Seven Java/report suites and
-  50 native tests pass. APK/checksum published; anonymous public download
-  matches the signed bytes. README download and beginner guide updated.
-  The new timed engine, upload and meter still need phone validation.
+- Latest 0.12 device report fails in **Latency** after roughly 6s, with no
+  download/upload attempted and zero transferred payload. Fresh registered n78
+  observations and Android NR RAT are present before and after the attempt.
+  A separate Refresh network snapshot also succeeds. No root operation ran.
+- Earlier 0.11 report remains the only speed evidence: about 266 Mbps download,
+  HTTP latency about 79 ms, upload timeout. Neither report demonstrates a full
+  successful speed test, nor a modem preference change in those sessions.
+- Current source fix: 0.12's 3s latency socket timeout/6s fail-fast gate is
+  replaced by an independent latency phase (5s socket, 8s total budget), followed
+  by download and upload even when a measurement fails. Stop/route changes remain
+  fatal. Each phase owns workers/connections, with asynchronous deadline cleanup
+  so stuck ping work cannot starve throughput workers. Bounded operation/HTTP
+  diagnostics, valid ping counts and Speeds measured · ping unavailable status
+  added. Eight host suites/checks, including real localhost HTTP, and Android
+  compilation pass. No new APK authorized; public 0.12 stays unchanged.
+- Neighbor-band discovery remains unresolved: serving observations only on the
+  tested firmware; its experimental QMI frequency request is unsupported.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
@@ -600,7 +592,7 @@ explicit build request authorizes packaging them in 0.11.
   `tests/test_speed_reports.sh` with SA_ANDROID_JAR and SA_JSON_JAR. Detailed
   method, privacy, limitations and primary sources: [docs/SPEEDTEST.md](docs/SPEEDTEST.md).
 
-## 0.11 phone feedback and follow-up source (2026-10-29, unreleased)
+## 0.11 phone feedback and revisions shipped in 0.12 (2026-10-29)
 
 User reported a failed speed test, then requested longer time-based tests and a
 less congested Speedtest screen with a meter like a conventional speed-test app.
@@ -656,6 +648,65 @@ Follow-up implementation:
   remain pending. Reviewed a rendered SVG design reference; it is not Android
   rendering evidence. The subsequent explicit build request now authorizes
   packaging these follow-ups in version 0.12 / code 12.
+
+## 0.12 phone failure and new investigation (2026-10-29)
+
+The user reports another failed test. The new report has a Latency-stage outer
+request deadline after roughly 6s, null HTTP latency/download/upload, zero sent,
+received and acknowledged payload, and no Before download/Before upload sample.
+Fresh registered n78 samples appear before latency and after the failed attempt;
+a separate Android network refresh also reports NR/n78. Root helper never ran.
+Do not publish the raw report or identifying/private timestamps/cell values.
+
+The report identifies the app's outer 6s latency deadline, not the specific
+DNS/TLS/server/transport cause. Increasing transfer timeouts in 0.12 did not
+change the latency probe's fail-fast control flow. It is incorrect to claim
+that the user's phone or Cloudflare universally cannot upload from this trace:
+no throughput phase was attempted.
+
+Source fix implemented and host-tested:
+
+- Latency, download and upload now handle ordinary endpoint/measurement failures
+  independently. A missing ping does not block throughput; an HTTP download
+  failure does not block upload. All successful measurements remain available.
+- Stop, interrupted controller and typed AbortException from subscription/route
+  checks remain fatal, with no later phase or alternate network. The Android
+  per-request route check now explicitly throws the fatal type; throttled checks
+  still run during data transfer. Original cellular Network pinning preserved.
+- Latency tries at most three probes within one 8s total budget, with 5s socket
+  timeout. Median uses only returned samples; attempts/valid count recorded.
+  Missing ping is null, never zero. If both rates complete without ping, the
+  shared UI/history outcome is **Speeds measured · ping unavailable**, while full
+  complete remains false and warnings remain in the report.
+- Each phase owns its executor and active request set. A hung probe cannot hold
+  workers needed by download/upload. Deadline/Stop cleanup and normal latency
+  connection cleanup run on daemon closers; connection registration checks ended
+  scopes so a delayed factory cannot start work after the phase ends. Normal
+  throughput requests keep bounded connect/read timeouts. OS I/O can take time
+  to close; do not claim an absolute network-stack interruption guarantee.
+- Per failed phase, snapshot at most eight recent requests: method, fixed
+  endpoint path, requested payload, current operation, elapsed time, HTTP status
+  when received, and exception type. Operations distinguish connection factory,
+  waiting for response headers (includes connection/TLS setup), upload stream,
+  writing payload, body read and connection close. These do not separately time
+  DNS versus TLS or prove the carrier/server caused a stall.
+- New JSON fields: latency_budget_ms, latency_socket_timeout_ms, latency_attempts,
+  latency_valid_samples, throughput_complete, aborted, phase_failures. Existing
+  fields retained for old reports. No headers/tokens/URL nonce/private identifiers
+  included in request diagnostics. No new provider or fallback network contacted.
+- Host regressions pass for timeout/TLS failures, a probe ignoring interruption,
+  blocked probe disconnect, absent ping with both rates, multiple phase failures,
+  Stop during a hung probe/upload, typed route abort and existing budgets/rates.
+- **Real HTTP integration** (`tests/test_speed_http.sh`, JDK17 jdk.httpserver,
+  localhost only) passed: delayed zero-byte headers, real download/upload body
+  transfer despite failed ping, HTTP 503 download with working upload, and Stop
+  during an in-flight ping preventing both data phases. No carrier route or TLS
+  measurement is inferred from loopback. Existing six Java suites plus report
+  suite and new real HTTP suite (eight in total) and Android javac pass.
+- Modem helper, SA/NR-only transaction, backup journal, boot plans, permissions,
+  duration/data-use policy and meter unchanged. New source only; no APK, DEX,
+  signing or release authorized. Published 0.12 APK stays unchanged.
+
 
 ## Approved 0.12 build checkpoint (2026-10-29)
 
@@ -896,13 +947,13 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-The approved 0.12 APK is built, signed, verified and published; public download
-verified and README links updated. Next, test the new timed engine, upload, dial,
-compact history and data-use flows on the phone. Use the chosen data SIM with
-Wi-Fi/VPN off and usable service; inspect per-phase serving observations and
-rates, Stop behavior and Location prompts with the switch on/off. The partial
-0.11 report is still the latest device evidence. Keep releases unchanged.
-Future source changes need a new explicit build approval.
+The new phase-isolation source fix, review and host checks are complete. Ask
+before a new APK, following the user's earlier instruction. The 0.12
+binary stays public and unchanged. Next device validation must establish that a
+failed/missing ping still reaches Before download/Before upload, and inspect
+phase_failures/operations if a throughput phase also fails. Do not describe host
+HTTP success as proof of Jio/Cloudflare/Android TLS behavior. The latest phone
+evidence is the 0.12 latency-only failure; no full phone speed test has succeeded.
 
 The approved 0.10 build/release is complete and the public APK download verified.
 Next, test native rendering/navigation, launcher appearance, font scale and

@@ -121,3 +121,14 @@ bash tests/test_speed_reports.sh
 The APK continues using Android's built-in `org.json`; no external JSON jar or
 Cloudflare SDK is bundled. These checks do not build an APK or execute Android
 views, connectivity services or AtomicFile storage.
+
+A real localhost HTTP regression (JDK 17 with `jdk.httpserver`) is also available:
+
+```sh
+bash tests/test_speed_http.sh
+```
+
+It deliberately stalls latency response headers and checks that both data
+phases still run. It also checks isolated HTTP failures and in-flight Stop.
+It transfers only small loopback payloads and contacts no external service.
+This test needs permission to listen on a loopback socket in restricted runners.

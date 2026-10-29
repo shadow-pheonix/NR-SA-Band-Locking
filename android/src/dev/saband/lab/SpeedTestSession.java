@@ -36,6 +36,7 @@ public final class SpeedTestSession {
         report.put("duration_per_direction_s",seconds);report.put("fixed_payload_cap",false);
         report.put("transfer_response_timeout_ms",SpeedTestEngine.RESPONSE_TIMEOUT_MS);report.put("initial_upload_chunk_bytes",SpeedTestEngine.UPLOAD_CHUNK_BYTES);
         report.put("transfer_connect_timeout_ms",SpeedTestEngine.CONNECT_TIMEOUT_MS);
+        report.put("latency_budget_ms",SpeedTestEngine.LATENCY_BUDGET_MS);report.put("latency_socket_timeout_ms",SpeedTestEngine.LATENCY_SOCKET_TIMEOUT_MS);
         report.put("last_read_sa_preference",preference);report.put("serving_samples",samples);
         try {
             cm=context.getSystemService(ConnectivityManager.class);
@@ -44,7 +45,10 @@ public final class SpeedTestSession {
             subscription=info.getSubscriptionId();tm=context.getSystemService(TelephonyManager.class).createForSubscriptionId(subscription);
             network=cm.getActiveNetwork();route();
             sample("Before latency");
-            engine=new SpeedTestEngine(url -> {route();return (HttpURLConnection)network.openConnection(url);},() -> {
+            engine=new SpeedTestEngine(url -> {
+                try {route();}catch(IOException e) {throw new SpeedTestEngine.AbortException(e.getMessage());}
+                return (HttpURLConnection)network.openConnection(url);
+            },() -> {
                 if(cancelled.get())throw new InterruptedIOException("Test stopped.");
                 synchronized(this) {long now=SystemClock.elapsedRealtime();if(now-checkedAt>=500) {route();checkedAt=now;}}
             },new SpeedTestEngine.Listener() {
@@ -63,12 +67,25 @@ public final class SpeedTestSession {
             report.put("http_latency_ms",result.latencyMs<0?JSONObject.NULL:result.latencyMs);
             report.put("download",rate(result.download));report.put("upload",rate(result.upload));
             report.put("failed_phase",result.failedPhase);report.put("error_type",result.errorType);
+            report.put("aborted",result.aborted);report.put("throughput_complete",result.throughputComplete()&&!cancelled.get());
+            report.put("latency_attempts",result.latencyAttempts);report.put("latency_valid_samples",result.latencyValidSamples);
+            JSONArray failures=new JSONArray();report.put("phase_failures",failures);
+            for(SpeedTestEngine.Failure failure:result.failures) {
+                JSONObject f=new JSONObject();f.put("phase",failure.phase);f.put("error_type",failure.errorType);f.put("error",failure.message);f.put("elapsed_ms",failure.elapsedMs);
+                JSONArray requests=new JSONArray();f.put("recent_requests",requests);
+                for(SpeedTestEngine.RequestInfo request:failure.requests) {
+                    JSONObject r=new JSONObject();r.put("method",request.method);r.put("endpoint",request.endpoint);r.put("operation",request.operation);
+                    r.put("elapsed_ms",request.elapsedMs);r.put("http_status",request.httpStatus<0?JSONObject.NULL:request.httpStatus);
+                    r.put("error_type",request.errorType);r.put("requested_payload_bytes",request.payloadBytes);requests.put(r);
+                }
+                failures.put(f);
+            }
             report.put("received_payload_bytes",result.receivedBytes);report.put("sent_payload_bytes",result.sentBytes);
             report.put("upload_acknowledged_bytes",result.uploadAcknowledgedBytes);
             // A SIM/route change at the last boundary must invalidate a previously successful result.
             if(!cancelled.get())route();
-        } catch(Exception e) {report.put("complete",false);report.put("cancelled",cancelled.get());report.put("error",cancelled.get()?"Stopped; incomplete results.":e.getMessage());}
-        if(cancelled.get()) {report.put("complete",false);report.put("cancelled",true);report.put("error","Stopped; incomplete results.");}
+        } catch(Exception e) {report.put("complete",false);report.put("throughput_complete",false);report.put("aborted",!cancelled.get());report.put("cancelled",cancelled.get());report.put("error",cancelled.get()?"Stopped; incomplete results.":e.getMessage());}
+        if(cancelled.get()) {report.put("complete",false);report.put("throughput_complete",false);report.put("cancelled",true);report.put("error","Stopped; incomplete results.");}
         report.put("finished_ms",System.currentTimeMillis());report.put("serving_bands_sampled",SpeedTestBands.summary(bandSamples));
         report.put("band_sampling_note","Fresh registered NR samples at phase boundaries, not continuous monitoring or a complete carrier-aggregation list. Unknown does not mean no coverage.");
         return report;

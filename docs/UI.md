@@ -126,3 +126,8 @@ Android design references:
 [navigation patterns](https://developer.android.com/design/ui/mobile/guides/layout-and-content/layout-and-nav-patterns),
 [window insets](https://developer.android.com/reference/android/view/WindowInsets),
 [touch target guidance](https://support.google.com/accessibility/android/answer/7101858).
+
+The unreleased phase-isolation follow-up retains this layout. Its shared outcome
+label reads **Speeds measured · ping unavailable** if both rate phases finish
+without latency, and keeps missing ping as a dash. Full reports add per-phase
+HTTP-operation diagnostics. This source fix is not in the 0.12 APK yet.

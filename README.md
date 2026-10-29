@@ -63,6 +63,18 @@ are requested separately when missing; firmware can still omit serving bands.
 [Preview the screen](docs/assets/speedtest-overview.svg) (illustrative design
 reference) · [Full speed-test guide and limitations](docs/SPEEDTEST.md).
 
+### Next source fix: failed ping no longer blocks throughput
+
+A later 0.12 phone report timed out during latency before either speed direction
+started. The new source makes latency/download/upload independent for endpoint
+errors, isolates phase workers and adds request-stage diagnostics. If download
+and upload finish without ping, history shows **Speeds measured · ping unavailable**.
+Stop and SIM/network changes still end the run. Eight host suites/checks,
+including real localhost HTTP, pass; phone validation is pending.
+
+**This fix is not in the downloadable 0.12 APK yet.** See [the speed-test
+guide](docs/SPEEDTEST.md) for the source behavior and limits.
+
 ### Version 0.9: reboot fix and optional reapply
 
 Version 0.9 fixes an Apply failure after reboot: it uses freshly read
