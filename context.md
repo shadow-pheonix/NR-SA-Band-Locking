@@ -19,16 +19,24 @@ history. Never publish credentials or private device identifiers here.
 - Public repository: <https://github.com/shadow-pheonix/NR-SA-Band-Locking>.
 - Canonical workspace: `/home/coder/NR-SA-Band-Locking`.
 - App/package: **SA Band Lab**, `dev.saband.lab`.
-- Current request (2026-10-31): user chose **Implement gauge** after reviewing
-  the interactive/PNG samples. Implement the native Signal tab between Bands
-  and Speedtest, including the gauge, best reading, recent trend, per-SIM fresh
-  serving observations, pause/resume, manual spot markers and opt-in sound.
-  Native implementation, docs and host/Java/DEX checks are complete and source
-  was published at fbf95b81a15a3df30f92f69a4070c5a52b575764. User then explicitly
-  said **Yes build**. Build/sign/verify/publish 0.15 is now authorized, with no
-  further approval needed. Version 0.15 is built, signed, verified and publicly
-  released. The anonymous download matches the local signed APK. This request
-  is complete; on-phone validation remains pending.
+- Current request (2026-10-31): extend Signal hunt with a minimap and automatic
+  markers for **both new strongest and new weakest session records** (user
+  clarified both), plus appropriate altitude/orientation/motion measurements.
+  User also requires saved sessions that can be reopened later with guidance
+  back to marked spots without a new hunt. Implement source/tests/docs first;
+  no new APK build is authorized yet. 0.15 build approval is fulfilled.
+- Positioning requirement: user asks for the exact original phone position.
+  Ordinary phone GNSS/IMU cannot guarantee this; show measured uncertainty,
+  timestamp alignment and missing data honestly. Never claim accelerometer/
+  gyro integration makes absolute coordinates exact. User clarified **mostly
+  indoors, within a room**, so an outdoor GNSS minimap
+  cannot satisfy the request. User then explicitly requested research into
+  sophisticated **camera-free** methods. Research is complete in
+  `docs/CAMERA_FREE_POSITIONING.md`; acoustic fingerprinting/SLAM is a credible
+  experimental phone-only route, and external ranging anchors are another
+  route. Camera is not a required premise. Exact repeatable 3D phone return
+  is still unproven on this device. No mapping/audio implementation or APK
+  is claimed. Both record extremes and persistent guidance remain required.
 - Latest published APK: **0.15**, version code **15**, name `0.15-sa-test`,
   ARM64, minimum Android 11 / API 30, target API 34. Signed, verified and public
   as an experimental prerelease. Previous releases remain unchanged.
@@ -75,6 +83,58 @@ history. Never publish credentials or private device identifiers here.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
+
+## Signal minimap and recorded-session guidance (2026-10-31, design in progress)
+
+Current Mark spot (0.15) saves only an in-memory RF reading, not coordinates.
+New requested behavior: automatically retain both highest/strongest and
+lowest/weakest fresh SS-RSRP records for a session, recording band/cell context.
+Persist session maps privately and let users reopen/select a mark and request
+foreground return guidance later. No modem writes or background location.
+
+Design limits: GNSS coordinates carry reported horizontal/vertical uncertainty;
+RF observation time must match a fresh position fix before attaching coordinates.
+Missing/poor/misaligned positions remain unlocated. Accelerometer/gyro detect
+movement, rotation-vector sensors provide pose/heading quality, and pressure
+provides relative height context; these must not be integrated into fabricated
+absolute movement. No exact-arrival assertion, room-scale positioning promise,
+GPS coordinates in diagnostics, external map provider or public sample logs.
+Initial outdoor GNSS grid idea is superseded by the indoor-room clarification.
+Do not implement it as an accurate indoor map. The concrete proposal and
+remaining decisions are in `docs/INDOOR_MAP_DESIGN.md`: optional ARCore
+camera/inertial tracking with a fixed measured visual reference, saved reference-
+relative poses and re-scanning the same reference before later return guidance.
+User subsequently requested camera-free research instead of choosing the camera
+workflow. Findings and a concrete feasibility-test plan are now in
+`docs/CAMERA_FREE_POSITIONING.md`. No mapping code, permission or SDK changes
+have been made. Camera + fixed reference remains an alternative, not the
+only approach. Acoustic echoes are a possible external-environment observation
+without a camera; accurate saved-session return still needs physical validation. Local ARCore world coordinates do not persist
+across sessions by themselves. Cloud Anchors involve an external service and
+spatial-data upload and are not implicitly authorized. ARCore does not supply
+a pose accuracy radius; do not invent centimetre accuracy or exact arrival.
+The official device list includes Xiaomi 13 Pro/Depth, but actual rooted-device
+AR availability and all physical accuracy tests remain unverified. Android references:
+- https://developer.android.com/reference/android/location/Location
+- https://developer.android.com/develop/sensors-and-location/sensors/sensors_motion
+- https://developer.android.com/develop/sensors-and-location/sensors/sensors_position
+
+## Camera-free research checkpoint (2026-10-31)
+
+Research-only request completed; no app implementation/build authorized in this
+turn. Reviewed primary papers and official Android/Xiaomi/Bluetooth sources,
+including 2026 acoustic SLAM work. See `docs/CAMERA_FREE_POSITIONING.md` for
+links, metrics and an implementation feasibility plan. The earlier claim that
+a camera is needed was too strong. Phone-only inertial estimation cannot
+establish an absolute saved-room position; acoustic environmental recognition
+is a credible research route, and fixed radio/acoustic anchors are alternatives.
+Do not turn experimental averages or tag-classification resolution into a
+promised exact 3D held-phone return. Hardware APIs, audio repeatability, model
+availability/usage terms, restart relocalisation and actual return error on
+Xiaomi 13 Pro remain unverified. An opt-in sensor/audio feasibility prototype
+and measured repeat-visit tests should precede navigation claims. No audio or
+room data may be uploaded implicitly because a research implementation uses
+servers. No new app code, permissions, SDK, APK or release.
 
 ## Approved 0.15 build checkpoint (2026-10-31)
 
@@ -1244,6 +1304,17 @@ environment-status tool and `/etc/codex/network-policy.json` were unavailable
 here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
+
+Current minimap request requires room-scale positioning, both automatic record
+extremes and persistent sessions with return guidance. Read
+`docs/CAMERA_FREE_POSITIONING.md` first, then `docs/INDOOR_MAP_DESIGN.md` for
+the alternative camera workflow. Camera-free feasibility research is complete.
+The next useful step is an explicitly scoped sensor/audio prototype with measured
+return tests, or a hardware-supported ranging route; no implementation of either
+is claimed. Ask about a new APK build only after authorized implementation and
+checks unless the current user request already authorizes it. Existing 0.15 is
+unchanged and public. The
+completed Gauge release and its validation notes below are historical.
 
 The selected native Gauge Signal tab and docs passed host/Java/DEX checks and
 were published as source. User explicitly approved the new build with **Yes build**.
