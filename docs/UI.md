@@ -17,19 +17,41 @@ screenshots or evidence of phone behavior**. The Bands panel is shown at the
 selection area; its read/backup card is above it in the scrollable page. The
 real grid contains only verified selectable bands for the chosen phone/SIM.
 
-## Four destinations in current source
+## Five destinations in current source
+
+**Signal is implemented in source and is not in the published 0.14 APK yet.**
 
 | Destination | Purpose and actions |
 | --- | --- |
 | **Overview** | Refresh Android cell observations; see the reported serving band, RSRP, SINR, NR cell count and nearby bands. Check modem preferences separately. Expand cell details when needed. |
 | **Bands** | Read live preferences and capture/verify the backup. Select SA bands in a responsive grid, use Select all or Clear selection, and stage NR-only/reboot options. Review the selection count and use the one Apply action. |
+| **Signal** | Start/pause serving-NR signal hunting. Read the segmented SS-RSRP gauge, best for this cell, independent quality measurements and 60-second trend. Mark readings for this session or opt into sound. |
 | **Speedtest** | Run a confirmed cellular-only download/upload/HTTP-ping test. Stop a run, compare local reports for this SIM, copy reports or clear history. Every result carries serving-band observations from during the run. |
 | **Tools** | Export/import backups, restore captured SA preferences, disable boot reapply, copy diagnostics, inspect phone capabilities and open network settings. Optional modem-frequency and legacy EFS reads sit under Advanced modem checks. |
 
 The header keeps a two-button SIM selector visible. The bottom navigation keeps
-all four destinations one tap away. Pages retain their views and scroll state
+all five destinations one tap away. Pages retain their views and scroll state
 when switching tabs, so tab changes do not reset checkbox choices or initiate
-root/network operations. Back from Bands or Tools returns to Overview.
+root/network operations. Back from another tab returns to Overview. Signal
+sampling pauses when leaving its tab; returning requires Resume. Saved page
+indexes from the earlier four-tab layout are migrated without moving a restored
+Speedtest page to Signal.
+
+## Signal hunt
+
+See [SIGNAL_HUNT.md](SIGNAL_HUNT.md) for the beginner flow and limits. Native
+Canvas views draw the segmented gauge and actual-time trend. There are no demo
+measurements in the Android screen. The selected subscription supplies serving
+NR readings, timestamps and independent SS-RSRP/SS-SINR/SS-RSRQ fields. Unknown,
+ambiguous or stale data stays unavailable. Best/delta comparisons reset when
+cell, channel or band changes; incomplete cell identity disables comparisons.
+
+Start/Pause, Mark spot and opt-in Sound actions sit below the trend. Marked
+readings are grouped in a collapsed session-only panel, with no GPS capture.
+Help is collapsed. Navigation/background/SIM changes pause sampling and release
+audio; a visible active hunt keeps the screen awake. Android 11 uses the legacy
+cell listener, and Android 12+ uses TelephonyCallback with the same freshness
+rules. Device rendering and callback delivery are still unverified.
 
 ## Band selection and recovery
 
@@ -106,6 +128,13 @@ existing operation/controller boundary. The Android theme is in
 `android/res/values/styles.xml`.
 
 ## Validation and remaining checks
+
+The new Signal source passes eight Java host suites, full Android Java and
+minimum-API-30 DEX compilation. Signal state tests cover fresh/stale timestamps,
+duplicates, out-of-order callbacks, cell/band resets, graph gaps, unknown fields,
+session mark limits and navigation migration. No APK has been built for Signal;
+its drawing, callbacks, audio, rotation and font scaling require phone checks
+after an authorized build. Existing published APK evidence below is historical.
 
 The signed 0.13 APK build passes, including Java/D8 and full AAPT2 resource
 linking. Package inspection confirms the adaptive/themed icon and theme. The original five Java

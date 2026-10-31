@@ -63,6 +63,8 @@ public class MainActivity extends Activity {
     private JSONArray speedHistory=new JSONArray();
     private long seenChangeFile;
     private JSONObject tileConfig;
+    private SignalHunt signalHunt;private SignalHuntSession signalSession;private SignalFeedback signalFeedback;private boolean foreground;
+    private final Runnable signalUiTick=new Runnable() {public void run() {if(alive&&foreground&&screen.page()==UiPresentation.SIGNAL) {showSignal();uiHandler.postDelayed(this,1000);}}};
     private final Handler uiHandler=new Handler(Looper.getMainLooper());
     private final Runnable ageTick=new Runnable() {public void run() {if(alive) {refreshPresentation();refreshBandLabels();uiHandler.postDelayed(this,15000);}}};
 
@@ -93,6 +95,10 @@ public class MainActivity extends Activity {
             public void clearSpeed() {clearSpeedHistory();}
             public void configureTile() {MainActivity.this.configureTile();}
             public void addTile() {addQuickTile();}
+            public void signalToggle() {toggleSignalHunt();}
+            public void signalMark() {markSignalSpot();}
+            public void signalSound() {if(!busy&&signalFeedback!=null) {signalFeedback.enabled(!signalFeedback.enabled());showSignal();}}
+            public void pageChanged(int page) {signalPageChanged(page);}
             public void draftChanged() {if(!bindingUi)refreshEnabled();}
             public void statusDetails() {new AlertDialog.Builder(MainActivity.this).setTitle("Operation details").setMessage(status.getText()).setPositiveButton("Close",null).setNeutralButton("Copy report",(d,w) -> MainActivity.this.copyReport()).show();}
         });
@@ -100,14 +106,18 @@ public class MainActivity extends Activity {
         supported=screen.supported;modemRadio=screen.modemRadio;bootStatus=screen.bootStatus;
         nrOnly=screen.nrOnly;persistLock=screen.persistLock;apply=screen.apply;restore=screen.restore;selectAll=screen.selectAll;deselectAll=screen.deselectAll;
         setContentView(screen.root);
+        signalFeedback=new SignalFeedback(this);
         screen.speedDuration.setSelection(getPreferences(MODE_PRIVATE).getInt("speed_seconds",20)==60?1:0);
         WindowInsetsController bars=getWindow().getInsetsController();if(bars!=null)bars.setSystemBarsAppearance(0,WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS|WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
         resetSlot(slot);
+        Object retained=getLastNonConfigurationInstance();
+        if(retained instanceof SignalHunt&&((SignalHunt)retained).slot==slot) {signalHunt=(SignalHunt)retained;signalHunt.pause();showSignal();}
         if(state!=null) {
             restoredBands=state.getIntArray("draft_bands");restoredNr=state.getBoolean("draft_nr");restoredReboot=state.getBoolean("draft_reboot");
             restoredBandScroll=state.getInt("scroll_"+UiPresentation.BANDS,0);
-            screen.showPage(state.getInt("page",UiPresentation.OVERVIEW));
-            for(int page=0;page<UiPresentation.PAGE_COUNT;page++)screen.restoreScroll(page,state.getInt("scroll_"+page,0));
+            int schema=state.getInt("navigation_schema",0);
+            screen.showPage(UiPresentation.restoredPage(state.getInt("page",UiPresentation.OVERVIEW),schema));
+            for(int page=0;page<UiPresentation.PAGE_COUNT;page++) {int oldPage=schema<2&&page>=UiPresentation.SPEED?page-1:page;screen.restoreScroll(page,schema<2&&page==UiPresentation.SIGNAL?0:state.getInt("scroll_"+oldPage,0));}
             if(restoredBands!=null)status.setText("Read preferences again to restore your previous selection for review.");
         }
         refreshEnabled();
@@ -120,6 +130,7 @@ public class MainActivity extends Activity {
         else resetSlot(next);
     }
     private void resetSlot(int next) {
+        pauseSignal(null);signalHunt=new SignalHunt(next);
         bindingUi=true;
         slot=next;probe=null;backup=null;bandBox.removeAllViews();bands.clear();restoredBands=null;restoredBandScroll=-1;seenChangeFile=new File(getFilesDir(),"qmi-last-change-slot"+slot+".json").lastModified();
         lastHelperResult=null;lastReport="No root operation has run for this SIM.";
@@ -148,6 +159,51 @@ public class MainActivity extends Activity {
     private void openNetworkSettings() {
         try {startActivity(new Intent(android.provider.Settings.ACTION_NETWORK_OPERATOR_SETTINGS));}
         catch(Exception e) {startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS));}
+    }
+    private void signalPageChanged(int page) {
+        uiHandler.removeCallbacks(signalUiTick);
+        if(page!=UiPresentation.SIGNAL) {if(signalHunt!=null&&signalHunt.running)pauseSignal(null);}
+        else {showSignal();if(foreground)uiHandler.post(signalUiTick);}
+    }
+    private void showSignal() {if(screen!=null&&signalHunt!=null)screen.showSignal(signalHunt,SystemClock.elapsedRealtime(),signalFeedback!=null&&signalFeedback.enabled(),busy);}
+    private void pauseSignal(String reason) {
+        if(signalSession!=null) {signalSession.stop();signalSession=null;}
+        if(signalHunt!=null) {signalHunt.pause();if(reason!=null)signalHunt.message=reason;}
+        if(signalFeedback!=null)signalFeedback.stop();
+        if(!speedRunning)getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        showSignal();
+    }
+    private void toggleSignalHunt() {
+        if(busy||!foreground||screen.page()!=UiPresentation.SIGNAL)return;
+        if(signalHunt.running) {pauseSignal(null);return;}
+        if(!requireLocationEnabled())return;
+        if(checkSelfPermission(Manifest.permission.READ_PHONE_STATE)!=PackageManager.PERMISSION_GRANTED||checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
+            new AlertDialog.Builder(this).setTitle("Read serving signal for SIM "+(slot+1)+"?")
+                .setMessage("Android needs Phone and Precise location access for serving-cell measurements. Signal hunting reads this SIM only, does not change bands and does not capture GPS coordinates. Marked readings stay in this session.")
+                .setNegativeButton("Cancel",null).setPositiveButton("Continue",(d,w) -> requestPermissions(new String[]{Manifest.permission.READ_PHONE_STATE,Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},9)).show();return;
+        }
+        final SignalHunt model=signalHunt;model.resume();
+        signalSession=new SignalHuntSession(this,slot,new SignalHuntSession.Listener() {
+            private boolean current() {return alive&&foreground&&model==signalHunt&&screen.page()==UiPresentation.SIGNAL;}
+            public void sample(SignalHunt.Sample sample) {
+                if(!current())return;long now=SystemClock.elapsedRealtime();boolean changed=model.accept(sample,now);
+                if(changed&&model.running&&model.fresh(now)&&!signalFeedback.sample(sample.rsrp,now))Toast.makeText(MainActivity.this,"Signal sound is unavailable. Visual hunting remains active.",Toast.LENGTH_LONG).show();
+                showSignal();
+            }
+            public void unavailable(String reason) {
+                if(!current())return;model.unavailable(reason);
+                if(signalSession!=null&&!signalSession.running()) {model.pause();model.message=reason;signalFeedback.stop();getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}
+                showSignal();
+            }
+            public void tick() {if(current())showSignal();}
+        });
+        signalSession.start();
+        if(signalSession.running()) {getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);status.setText("Signal hunt · SIM "+(slot+1)+" · serving NR observations only.");}
+        showSignal();
+    }
+    private void markSignalSpot() {
+        if(!busy&&signalHunt!=null&&signalHunt.mark(SystemClock.elapsedRealtime())) {showSignal();Toast.makeText(this,"Signal spot marked for this session",Toast.LENGTH_SHORT).show();}
+        else Toast.makeText(this,"A fresh serving reading and complete cell identity are needed to mark a spot.",Toast.LENGTH_LONG).show();
     }
     private void addQuickTile() {
         if(Build.VERSION.SDK_INT>=33) {
@@ -324,19 +380,22 @@ public class MainActivity extends Activity {
         screen.showNetwork(UiPresentation.network(bandSnapshot,observationElapsed(),lastBandObservation!=null&&lastBandObservation.optBoolean("cached_may_include_other_sims")),freshness,rat==20?"5G NR":rat==13?"LTE":"");
         screen.showPreferencesSummary(probe==null?"":bandNames(probe.optString("sa_hex")),UiPresentation.mode(probe==null?-1:probe.optInt("rat_mode_preference",-1)),ready(),backup!=null,backup!=null&&matchesDevice(backup),probe==null?"":probe.optString("transport"));
         screen.showDraft(selectedCount(),hasDraft(),ready(),nrOnly.isChecked(),persistLock.isChecked());screen.setBusy(busy);
+        showSignal();
     }
     @Override protected void onSaveInstanceState(Bundle state) {
-        super.onSaveInstanceState(state);state.putInt("slot",slot);state.putInt("page",screen.page());
+        super.onSaveInstanceState(state);state.putInt("slot",slot);state.putInt("page",screen.page());state.putInt("navigation_schema",2);
         for(int page=0;page<UiPresentation.PAGE_COUNT;page++)state.putInt("scroll_"+page,screen.scrollY(page));
         if(ready()) {state.putIntArray("draft_bands",selectedBands());state.putBoolean("draft_nr",nrOnly.isChecked());state.putBoolean("draft_reboot",persistLock.isChecked());}
         else if(restoredBands!=null) {state.putIntArray("draft_bands",restoredBands);state.putBoolean("draft_nr",restoredNr);state.putBoolean("draft_reboot",restoredReboot);}
     }
     @Override protected void onResume() {
-        super.onResume();uiHandler.removeCallbacks(ageTick);uiHandler.post(ageTick);
+        super.onResume();foreground=true;uiHandler.removeCallbacks(ageTick);uiHandler.post(ageTick);
+        uiHandler.removeCallbacks(signalUiTick);if(screen.page()==UiPresentation.SIGNAL)uiHandler.post(signalUiTick);
         loadTileSummary();
         if(probe!=null&&!busy&&seenChangeFile!=new File(getFilesDir(),"qmi-last-change-slot"+slot+".json").lastModified())readPreferences();
     }
-    @Override protected void onPause() {uiHandler.removeCallbacks(ageTick);if(speedRunning)stopSpeedTest();super.onPause();}
+    @Override protected void onPause() {foreground=false;uiHandler.removeCallbacks(ageTick);uiHandler.removeCallbacks(signalUiTick);if(signalHunt!=null&&signalHunt.running)pauseSignal(null);if(speedRunning)stopSpeedTest();super.onPause();}
+    @Override public Object onRetainNonConfigurationInstance() {return signalHunt;}
     private void refreshEnabled() {
         for(Button b:actions)b.setEnabled(!busy);
         for(CheckBox b:bands) {b.setEnabled(!busy);b.setAlpha(busy?0.55f:1f);}
@@ -360,6 +419,7 @@ public class MainActivity extends Activity {
     private interface Job {void run() throws Exception;}
     private void work(String text,Job job) {
         if(busy)return;
+        if(signalHunt!=null&&signalHunt.running)pauseSignal("Paused for another app operation. Resume when ready.");
         busy=true;status.setText(text);refreshEnabled();
         worker.execute(() -> {
             try {PreferenceStore.LOCK.lock();try {job.run();}finally {PreferenceStore.LOCK.unlock();}}
@@ -526,7 +586,22 @@ public class MainActivity extends Activity {
         Toast.makeText(this,"Report copied",Toast.LENGTH_SHORT).show();
     }
     private String report() {
-        JSONObject r=new JSONObject();try {r.put("app","SA Band Lab 0.14");r.put("model",Build.MODEL);r.put("android",Build.VERSION.RELEASE);r.put("fingerprint",Build.FINGERPRINT);r.put("baseband",baseband());r.put("slot",slot);r.put("helper_result",lastHelperResult==null?lastReport:lastHelperResult);if(lastChange!=null)r.put("last_preference_change",lastChange);if(tileConfig!=null)r.put("quick_tile_profile",tileConfig);r.put("reapply_after_reboot_enabled",activeBootPlan!=null);if(activeBootPlan!=null)r.put("boot_reapply_plan",activeBootPlan);if(lastBootResult!=null)r.put("last_boot_reapply",lastBootResult);if(lastEfsResult!=null)r.put("efs_diagnostic",lastEfsResult);r.put("serving_state",radio.getText());if(lastBandObservation!=null)r.put("five_g_observation",lastBandObservation);if(lastModemFrequencies!=null)r.put("modem_frequencies",lastModemFrequencies);if(backup!=null)r.put("backup",backup);for(int i=0;i<speedHistory.length();i++) {JSONObject test=speedHistory.optJSONObject(i);if(test!=null&&test.optInt("slot",-1)==slot) {r.put("latest_speed_test",test);break;}}return r.toString(2);}catch(Exception e) {return lastReport;}
+        JSONObject r=new JSONObject();try {r.put("app","SA Band Lab 0.14");r.put("model",Build.MODEL);r.put("android",Build.VERSION.RELEASE);r.put("fingerprint",Build.FINGERPRINT);r.put("baseband",baseband());r.put("slot",slot);r.put("helper_result",lastHelperResult==null?lastReport:lastHelperResult);if(lastChange!=null)r.put("last_preference_change",lastChange);if(tileConfig!=null)r.put("quick_tile_profile",tileConfig);if(signalHunt!=null)r.put("signal_hunt",signalReport());r.put("reapply_after_reboot_enabled",activeBootPlan!=null);if(activeBootPlan!=null)r.put("boot_reapply_plan",activeBootPlan);if(lastBootResult!=null)r.put("last_boot_reapply",lastBootResult);if(lastEfsResult!=null)r.put("efs_diagnostic",lastEfsResult);r.put("serving_state",radio.getText());if(lastBandObservation!=null)r.put("five_g_observation",lastBandObservation);if(lastModemFrequencies!=null)r.put("modem_frequencies",lastModemFrequencies);if(backup!=null)r.put("backup",backup);for(int i=0;i<speedHistory.length();i++) {JSONObject test=speedHistory.optJSONObject(i);if(test!=null&&test.optInt("slot",-1)==slot) {r.put("latest_speed_test",test);break;}}return r.toString(2);}catch(Exception e) {return lastReport;}
+    }
+    private JSONObject signalReport() throws Exception {
+        JSONObject r=new JSONObject();long now=SystemClock.elapsedRealtime();
+        r.put("slot",signalHunt.slot);r.put("running",signalHunt.running);r.put("source","android_subscription_cell_updates");
+        r.put("status",signalHunt.status(now));r.put("fresh",signalHunt.fresh(now));r.put("freshness_limit_ms",SignalHunt.FRESH_MS);
+        r.put("trend_points",signalHunt.points(now).size());r.put("marked_spots",signalHunt.marks().size());
+        r.put("best_ss_rsrp_dbm",signalHunt.best==null?JSONObject.NULL:signalHunt.best.rsrp);
+        SignalHunt.Sample sample=signalHunt.current;
+        if(sample!=null) {
+            JSONObject last=new JSONObject();JSONArray bands=new JSONArray();for(int b:sample.bands)bands.put(b);
+            last.put("bands",bands);last.put("pci",availableNumber(sample.pci));last.put("nrarfcn",availableNumber(sample.arfcn));
+            last.put("age_ms",sample.age(now)<0?JSONObject.NULL:sample.age(now));last.put("cell_identity_complete",sample.key()!=null);
+            last.put("ss_rsrp_dbm",availableNumber(sample.rsrp));last.put("ss_sinr_db",availableNumber(sample.sinr));last.put("ss_rsrq_db",availableNumber(sample.rsrq));r.put("last_observation",last);
+        }
+        return r;
     }
     private void exportBackups() {
         Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"sa-band-lab-backup.json");startActivityForResult(i,100);
@@ -647,6 +722,8 @@ public class MainActivity extends Activity {
         else if(request==7)status.setText("Serving-state permission was not granted. Preference operations remain available.");
         else if(request==8&&grants.length==3&&grants[0]==0&&grants[1]==0)confirmSpeedTest();
         else if(request==8)status.setText("Phone and Precise location permission are needed for speed reports with serving-band observations.");
+        else if(request==9&&grants.length==3&&grants[0]==0&&grants[1]==0) {if(foreground&&screen.page()==UiPresentation.SIGNAL)toggleSignalHunt();else status.setText("Signal permissions granted. Open Signal and press Start hunt.");}
+        else if(request==9)status.setText("Phone and Precise location access are needed for serving-signal hunting.");
     }
     @Override public void onBackPressed() {
         if(screen.page()!=UiPresentation.OVERVIEW) {screen.showPage(UiPresentation.OVERVIEW);return;}
@@ -655,5 +732,5 @@ public class MainActivity extends Activity {
                 .setNegativeButton("Keep editing",null).setPositiveButton("Leave",(d,w) -> finish()).show();
         else super.onBackPressed();
     }
-    @Override protected void onDestroy() {if(speedSession!=null)speedSession.cancel();alive=false;uiHandler.removeCallbacks(ageTick);worker.shutdown();super.onDestroy();}
+    @Override protected void onDestroy() {pauseSignal(null);if(speedSession!=null)speedSession.cancel();alive=false;uiHandler.removeCallbacks(ageTick);uiHandler.removeCallbacks(signalUiTick);worker.shutdown();super.onDestroy();}
 }

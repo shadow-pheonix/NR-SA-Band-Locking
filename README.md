@@ -25,6 +25,18 @@ meaningful checkpoint.
 Download the `.apk` file to install the app. GitHub's **Source code (zip)** is for
 developers and cannot be installed as an Android app.
 
+### In source: Signal hunt with a Gauge meter
+
+The new **Signal** tab sits between Bands and Speedtest. Start a hunt to see
+fresh serving-cell SS-RSRP, separate SINR/RSRQ, the best reading for the current
+cell and a 60-second trend. Mark spots for this session or enable optional
+strength-pitched sound. Cell changes reset comparisons; stale/missing readings
+stay clearly unavailable. Sampling pauses when leaving the tab or app.
+
+**This feature is not in the published 0.14 APK yet.** Source tests and Android
+compilation pass; live phone behavior still needs validation. See the
+[Signal hunt guide](docs/SIGNAL_HUNT.md) for use and measurement limits.
+
 ### Version 0.14: keep speeds measured before an interruption
 
 A 0.13 phone test received about 793.6 MB before HTTP 429 stopped download at

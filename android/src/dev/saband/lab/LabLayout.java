@@ -20,6 +20,7 @@ public final class LabLayout {
         void selectAll();void clearAll();void copyReport();void exportBackup();void importBackup();
         void disableReapply();void frequencies();void efs();void networkSettings();void draftChanged();void statusDetails();
         void startSpeed();void stopSpeed();void copySpeed();void clearSpeed();void configureTile();void addTile();
+        void signalToggle();void signalMark();void signalSound();void pageChanged(int page);
     }
     public static final int BG=Color.rgb(10,16,24), SURFACE=Color.rgb(18,28,40), LINE=Color.rgb(37,51,66);
     public static final int INK=Color.rgb(235,241,248), MUTED=Color.rgb(154,174,193), MINT=Color.rgb(84,211,190), AMBER=Color.rgb(245,190,109);
@@ -35,6 +36,9 @@ public final class LabLayout {
     public final Spinner speedDuration;
     public final SpeedometerView speedometer;
     public final TextView speedDownload,speedUpload,speedPing,speedElapsed,speedServing;
+    public final SignalGaugeView signalGauge;public final SignalTrendView signalTrend;
+    public final TextView signalCell,signalStatus,signalDelta,signalBest,signalSinr,signalRsrq,signalAge,signalMarks;
+    public final Button signalToggle,signalMark,signalSound;
     private final LinearLayout speedHistoryCards;
     private boolean showOlderSpeedTests;
     private final FrameLayout pages;
@@ -87,6 +91,7 @@ public final class LabLayout {
         LinearLayout preferences=card(overview);eyebrow(preferences,"MODEM PREFERENCE");preferenceValue=text(preferences,"Not read yet",20,INK,true);
         text(preferences,"A selected preference and a serving cell are different checks.",12,MUTED,false);
         navigationButton(preferences,"Manage SA bands",() -> showPage(UiPresentation.BANDS));
+        navigationButton(preferences,"Hunt better signal",() -> showPage(UiPresentation.SIGNAL));
         navigationButton(preferences,"Compare speeds",() -> showPage(UiPresentation.SPEED));
         LinearLayout details=card(overview);radio=text(details,"Refresh network to see serving and nearby cell details.",13,MUTED,false);radio.setTextIsSelectable(true);
         fold(details,"Cell details",radio,false);
@@ -114,6 +119,21 @@ public final class LabLayout {
         selectionHint=text(footer,"Nothing changes until you press Apply.",12,MUTED,false);
         apply=button(footer,"Apply SA bands until reboot",true,callbacks::apply);
         if(activity.getResources().getConfiguration().screenHeightDp<540)bandContent.addView(footer);else bandsPage.addView(footer);
+
+        LinearLayout signal=scrollPage(UiPresentation.SIGNAL);heading(signal,"Signal hunt","Move slowly. Compare fresh serving-cell readings.");
+        signalCell=text(signal,"SIM 1 · serving 5G not read",13,MINT,true);
+        signalStatus=text(signal,"Start a hunt to read this SIM's signal.",12,MUTED,false);signalStatus.setPadding(0,dp(12),0,0);
+        signalStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        signalGauge=new SignalGaugeView(activity);signal.addView(signalGauge,new LinearLayout.LayoutParams(-1,-2));
+        signalDelta=text(signal,"Waiting for fresh data",14,MINT,true);signalDelta.setGravity(Gravity.CENTER);signalDelta.setPadding(0,dp(10),0,dp(16));
+        LinearLayout best=card(signal);signalBest=text(best,"Best this cell · —",17,INK,true);
+        LinearLayout quality=row();if(activity.getResources().getConfiguration().fontScale>1.4f)quality.setOrientation(LinearLayout.VERTICAL);
+        signalSinr=metric(quality,"SS-SINR · CLARITY","dB",true);signalRsrq=metric(quality,"SS-RSRQ · QUALITY","dB",false);margin(signal,quality,0,0,0,14);
+        eyebrow(signal,"RECENT STRENGTH · dBm · LAST 60 SECONDS");signalTrend=new SignalTrendView(activity);signal.addView(signalTrend,new LinearLayout.LayoutParams(-1,-2));
+        LinearLayout huntActions=row();signalToggle=button(huntActions,"Start hunt",true,callbacks::signalToggle);signalMark=button(huntActions,"Mark spot",false,callbacks::signalMark);equalButtons(huntActions,signalToggle,signalMark);signal.addView(huntActions);
+        signalSound=button(signal,"Sound off",false,callbacks::signalSound);signalAge=text(signal,"No observations yet.",12,MUTED,false);signalAge.setPadding(0,dp(10),0,dp(12));
+        LinearLayout spots=card(signal);signalMarks=text(spots,"No marked spots yet. Marks last for this session; GPS coordinates are not captured.",13,MUTED,false);signalMarks.setTextIsSelectable(true);fold(spots,"Marked spots · this session",signalMarks,false);
+        text(signal,"Less-negative dBm means stronger reception. Use SINR and a speed test to compare performance. Cell changes restart the comparison; old or missing data stays unavailable. Sound respects silent mode. Enable Location and Phone/Precise location access when prompted. If LTE-only is enabled, switch to 5G before hunting.",12,MUTED,false);
 
         LinearLayout speed=scrollPage(UiPresentation.SPEED);heading(speed,"Speedtest","Measure your current connection.");
         LinearLayout test=card(speed);
@@ -173,11 +193,11 @@ public final class LabLayout {
         text(tools,"SA Band Lab · experimental\nSA only · root required for modem control",12,MUTED,false);
 
         LinearLayout bottom=row();bottom.setPadding(dp(10),dp(6),dp(10),dp(6));bottom.setBackgroundColor(SURFACE);
-        String[] labels={"Overview","Bands","Speedtest","Tools"};
+        String[] labels={"Overview","Bands","Signal","Speedtest","Tools"};
         for(int i=0;i<UiPresentation.PAGE_COUNT;i++) {
-            final int target=i;LinearLayout item=column();item.setGravity(Gravity.CENTER);item.setMinimumHeight(dp(64));item.setPadding(dp(8),dp(6),dp(8),dp(6));
+            final int target=i;LinearLayout item=column();item.setGravity(Gravity.CENTER);item.setMinimumHeight(dp(64));item.setPadding(dp(3),dp(6),dp(3),dp(6));
             Glyph icon=new Glyph(activity,i);item.addView(icon,new LinearLayout.LayoutParams(dp(42),dp(28)));
-            TextView label=text(item,labels[i],11,MUTED,true);label.setGravity(Gravity.CENTER);label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            TextView label=text(item,labels[i],11,MUTED,true);label.setGravity(Gravity.CENTER);label.setMaxLines(2);label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             item.setOnClickListener(v -> showPage(target));item.setFocusable(true);item.setContentDescription(labels[i]+" tab");
             navigation[i]=item;navIcons[i]=icon;navLabels[i]=label;bottom.addView(item,new LinearLayout.LayoutParams(0,-2,1));
         }
@@ -194,12 +214,35 @@ public final class LabLayout {
             navigation[i].setSelected(i==page);navLabels[i].setTextColor(i==page?MINT:MUTED);navIcons[i].active=i==page;navIcons[i].invalidate();
         }
         destinations[page].setAccessibilityPaneTitle(UiPresentation.pageTitle(page));
+        if(changed)callbacks.pageChanged(page);
     }
     public void setSlot(int slot) {
         speedServing.setText("SIM "+(slot+1)+" · mobile data · Cloudflare");
         for(int i=0;i<2;i++) {sims[i].setSelected(i==slot);sims[i].setTextColor(i==slot?BG:MUTED);sims[i].setBackground(shape(i==slot?MINT:Color.TRANSPARENT,12,Color.TRANSPARENT));}
     }
     public void setBusy(boolean busy) {progress.setVisibility(busy?View.VISIBLE:View.GONE);for(Button sim:sims)sim.setEnabled(!busy);}
+    public void showSignal(SignalHunt hunt,long now,boolean sound,boolean busy) {
+        boolean fresh=hunt.fresh(now);SignalHunt.Sample sample=hunt.current;
+        update(signalCell,sample==null?"SIM "+(hunt.slot+1)+" · serving 5G not read":(!fresh||!hunt.running?"Last: ":"")+"SIM "+(hunt.slot+1)+" · "+sample.bandLabel()+" · 5G NR · PCI "+(sample.pci==SignalHunt.UNKNOWN?"—":sample.pci));
+        update(signalStatus,hunt.status(now));signalGauge.reading(fresh?sample.rsrp:SignalHunt.UNKNOWN,hunt.best==null?SignalHunt.UNKNOWN:hunt.best.rsrp);
+        String delta="Waiting for fresh data";
+        if(!hunt.running)delta=sample==null?"Start a hunt to begin":"Paused · last observation";
+        else if(fresh&&sample.rsrp==SignalHunt.UNKNOWN)delta="SS-RSRP not reported";
+        else if(fresh&&hunt.baseline!=null) {int difference=sample.rsrp-hunt.baseline.rsrp;delta=difference==0?"Starting point for this cell":Math.abs(difference)+" dB "+(difference>0?"stronger":"weaker")+" than start";}
+        else if(fresh&&sample.key()==null)delta="Cell identity unavailable";
+        update(signalDelta,delta);update(signalBest,"Best this cell · "+(hunt.best==null?"—":hunt.best.rsrp+" dBm"));
+        update(signalSinr,fresh&&sample.sinr!=SignalHunt.UNKNOWN?""+sample.sinr:"—");update(signalRsrq,fresh&&sample.rsrq!=SignalHunt.UNKNOWN?""+sample.rsrq:"—");
+        signalTrend.samples(hunt.points(now),now);
+        update(signalAge,sample==null?"No observations yet.":"Last observation: "+(sample.age(now)<0?"age unavailable":sample.age(now)/1000+"s ago")+" · modem updates may be delayed");
+        signalToggle.setText(hunt.running?"Pause hunt":sample==null?"Start hunt":"Resume hunt");signalToggle.setEnabled(!busy);signalToggle.setAlpha(busy?.42f:1f);
+        signalMark.setEnabled(!busy&&hunt.canMark(now));signalMark.setAlpha(signalMark.isEnabled()?1f:.42f);
+        signalSound.setText(sound?"Sound on":"Sound off");signalSound.setContentDescription("Signal feedback sound "+(sound?"on":"off"));signalSound.setEnabled(!busy);
+        StringBuilder marked=new StringBuilder();int index=0;
+        for(SignalHunt.Sample spot:hunt.marks()) {
+            if(marked.length()>0)marked.append("\n\n");marked.append(++index).append(". ").append(spot.bandLabel()).append(" · PCI ").append(spot.pci).append("\n").append(spot.rsrp).append(" dBm · SINR ").append(spot.sinr==SignalHunt.UNKNOWN?"—":spot.sinr+" dB").append(" · RSRQ ").append(spot.rsrq==SignalHunt.UNKNOWN?"—":spot.rsrq+" dB");
+        }
+        update(signalMarks,marked.length()==0?"No marked spots yet. Marks last for this session; GPS coordinates are not captured.":marked.toString());
+    }
     public void showNetwork(UiPresentation.Network network,String freshness,String rat) {
         update(heroBand,network.band);heroBand.setTextSize(network.band.length()>10?32:56);update(heroLabel,rat.isEmpty()?network.label:rat+" · "+network.label);heroLabel.setTextColor(network.recent?MINT:MUTED);
         update(heroDetail,freshness+"\n"+network.detail);update(rsrpValue,network.rsrp);update(sinrValue,network.sinr);update(cellValue,network.count<0?"—":Integer.toString(network.count));update(nearbyValue,network.nearby);
@@ -350,6 +393,7 @@ public final class LabLayout {
             paint.setColor(active?MINT:MUTED);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(1.8f);paint.setStrokeCap(Paint.Cap.ROUND);paint.setStrokeJoin(Paint.Join.ROUND);
             if(kind==0) {canvas.drawRoundRect(3,3,21,21,5,5,paint);canvas.drawLine(7,15,7,17,paint);canvas.drawLine(12,10,12,17,paint);canvas.drawLine(17,7,17,17,paint);}
             else if(kind==1) {canvas.drawLine(4,7,20,7,paint);canvas.drawLine(4,17,20,17,paint);paint.setStyle(Paint.Style.FILL);canvas.drawCircle(9,7,3,paint);canvas.drawCircle(16,17,3,paint);}
+            else if(kind==UiPresentation.SIGNAL) {canvas.drawCircle(12,10,2,paint);canvas.drawLine(12,13,12,22,paint);canvas.drawArc(6,4,18,16,135,90,false,paint);canvas.drawArc(6,4,18,16,-45,90,false,paint);canvas.drawArc(2,0,22,20,135,90,false,paint);canvas.drawArc(2,0,22,20,-45,90,false,paint);}
             else if(kind==UiPresentation.SPEED) {canvas.drawArc(3,5,21,23,180,180,false,paint);canvas.drawLine(12,14,18,8,paint);canvas.drawCircle(12,14,2,paint);}
             else {canvas.drawRoundRect(4,4,20,21,3,3,paint);canvas.drawLine(8,9,16,9,paint);canvas.drawLine(8,13,16,13,paint);canvas.drawLine(8,17,12,17,paint);}
             canvas.restore();

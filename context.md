@@ -1,6 +1,6 @@
 # SA Band Lab: session context and handoff
 
-Last updated: **2026-10-29 UTC**.
+Last updated: **2026-10-31 UTC**.
 
 This file preserves the project's decisions, research, implementation, device
 feedback and operating details so a fresh session can continue without the
@@ -19,6 +19,13 @@ history. Never publish credentials or private device identifiers here.
 - Public repository: <https://github.com/shadow-pheonix/NR-SA-Band-Locking>.
 - Canonical workspace: `/home/coder/NR-SA-Band-Locking`.
 - App/package: **SA Band Lab**, `dev.saband.lab`.
+- Current request (2026-10-31): user chose **Implement gauge** after reviewing
+  the interactive/PNG samples. Implement the native Signal tab between Bands
+  and Speedtest, including the gauge, best reading, recent trend, per-SIM fresh
+  serving observations, pause/resume, manual spot markers and opt-in sound.
+  Native implementation, docs and host/Java/DEX checks are complete. No APK
+  build requested for this new feature yet; ask after source delivery per
+  AGENTS.md. Earlier 0.14 build approval is fulfilled.
 - Latest published APK: **0.14**, version code **14**, name `0.14-sa-test`,
   ARM64, minimum Android 11 / API 30, target API 34. Signed, verified and public
   as an experimental prerelease. Previous releases remain unchanged.
@@ -65,6 +72,99 @@ history. Never publish credentials or private device identifiers here.
 - Session-continuity documentation is now provided by this file and the
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
+
+## Signal hunt: native Gauge implementation (2026-10-31)
+
+User selected **Implement gauge** after the PNG samples. Native implementation
+is now present: Signal is between Bands and Speedtest; segmented meter, best
+marker, independent SS-SINR/SS-RSRQ, actual-time 60s graph, pause/resume,
+20 session-only manual markers and opt-in short sound. No sample/demo values
+are used in Android code. Strength uses raw reported SS-RSRP; missing fields
+stay unavailable. Best/baseline reset when full cell/band/channel context changes.
+Without enough identity to compare cells, fresh numeric strength remains usable
+but best/delta/mark are unavailable. NCI/TAC are used in memory, not exported in
+the new diagnostic summary. No GPS location is captured.
+
+`SignalHuntSession` uses the selected subscription's API 31+ CellInfoListener
+and bounded requestCellInfoUpdate, with API 30 PhoneStateListener compatibility.
+No getAllCellInfo cache fallback. Only a unique fresh registered primary NR cell
+(or a sole fresh registered NR cell) is selected. Ambiguous, neighbor-only,
+stale, undated/future or unavailable readings do not become live scores. Modem
+observation timestamps drive a 5s freshness limit; duplicates do not append
+history or beep. Queries are at least 5s apart with 8s timeout; late callbacks
+are rejected by run/request tokens. An asynchronous query error does not erase
+a still-fresh listener observation. SIM/location/permission/lifecycle changes
+stop or pause safely, release audio and clear foreground keep-screen-on.
+
+Model and marks survive activity rotation in memory, paused, and reset on SIM
+change or a new process. Marks are explicitly this-session only. Pausing/tab
+switching/backgrounding unregisters listeners and does not auto-resume.
+The main screen ages readings while visible; stale fields are blank with last
+context labeled. No root/helper, radio preference, boot plan or speed-engine
+changes. Navigation state schema 2 migrates the old four-tab saved page indexes.
+
+Validation complete: eight core Java suites (including new SignalHuntTest),
+full Android Java compilation and minimum-API-30 DEX compilation pass. Tests cover timestamp freshness,
+deduplication/order, cell/band resets, independent quality, graph gaps/limits,
+mark limits/eligibility, missing identities/fields, scale and page migration.
+The usage guide is `docs/SIGNAL_HUNT.md`; README and UI documentation clearly
+label this source-only feature, leaving the published 0.14 download unchanged.
+`git diff --check` passes. Relevant commands:
+
+```sh
+SA_JAVA_HOME=/tmp/dietlog-java bash tests/test_five_g_bands.sh
+/tmp/dietlog-java/bin/javac -source 8 -target 8 -Xlint:-options -classpath /tmp/sa-build-tools/android.jar -d build/signal-compile android/src/dev/saband/lab/*.java
+# ZIP the compiled classes to build/signal-classes.jar, then:
+/tmp/dietlog-java/bin/java -cp /tmp/sa-build-tools/d8.jar com.android.tools.r8.D8 --min-api 30 --lib /tmp/sa-build-tools/android.jar --output build/signal-dex build/signal-classes.jar
+```
+
+These are compile/test checks, not APK assembly/signing. No APK build or version
+bump is authorized for this feature yet. Source delivery includes this context.
+Android/HyperOS callback,
+rendering, audio and lifecycle delivery still need phone validation.
+
+## Signal hunt tab: preview first (2026-10-31)
+
+User asked for a new tab with a visual signal meter for finding better reception
+and explicitly requested seeing how it looks/works first. An interactive sample
+is prepared at `build/signal-preview/signal-hunt.html` (ignored preview output,
+not Android application code). Proposed navigation: Overview / Bands / Signal /
+Speedtest / Tools. No app implementation, version bump, APK build or release for
+this request at the preview checkpoint. The user subsequently approved Gauge
+with Implement gauge. Native implementation/checks are now complete above.
+
+Two sample layouts share the same simulated state: Gauge uses a segmented
+SS-RSRP meter and a best-reading marker; Outdoor uses larger digits and a bar
+meter. Both show serving band/PCI context, relative improvement from the start,
+best reading in this cell, SS-SINR, SS-RSRQ, a recent trend, pause/resume, Mark
+spot and optional sound. The strength slider and stale/cell-change controls
+are explicitly sample-only. All RF/PCI values are synthetic, not connected to
+the user's phone. Higher pitch follows stronger simulated signal after opt-in;
+no autoplay. Mark spot is a manual comparison marker, not GPS location logging.
+
+The concept shows unavailable current values when stale and blocks marking
+stale samples; changing cell starts a fresh baseline/best comparison. No tower
+bearing, full RF/neighbor scan, band changes or speed guarantees are implied.
+Actual implementation should use fresh selected-subscription serving samples,
+separate strength from quality, preserve stale/unavailable values honestly,
+and avoid promising a new modem measurement every second. Android documents
+rate-limited/non-guaranteed cell refreshes; check timestamps and unavailable
+sentinels. Existing Location/Phone permission flow can be reused when implementing.
+
+References checked:
+- <https://developer.android.com/reference/android/telephony/CellSignalStrengthNr>
+- <https://developer.android.com/reference/android/telephony/TelephonyManager#requestCellInfoUpdate(java.util.concurrent.Executor,android.telephony.TelephonyManager.CellInfoCallback)>
+
+Browser validation uses the visualize skill's sandbox wrapper plus local static
+runtime dependencies. The preview check is `build/signal-preview/check-signal.cjs`;
+fonts config is validation-only. Checks cover slider/best, mark, pause/resume,
+stale suppression, cell baseline reset, both variants, readable text and dark/light
+layouts at 320/390/736px. Local screenshots are `signal-gauge.png` and
+`signal-outdoor.png` in the same directory. No Android/modem tests are needed
+for this preview-only work, and none are claimed. Await design feedback before
+implementing the app tab at that checkpoint. Gauge is now selected; implement
+it and run meaningful checks (completed above). No APK build is authorized for
+this new feature yet.
 
 ## Current fix: retain interrupted speed measurements (2026-10-29)
 
@@ -575,7 +675,9 @@ transport hooks are compiled out of the production ARM64 helper.
 | `PreferenceJournal.java` | Pure Java reconciliation of expected/pending state, immutable original SA/NSA and captured-mode handling |
 | `PreferenceStore.java` | Atomic JSON persistence, device binding, journal adapter and shared process-wide transaction lock |
 | `RadioModeSelection.java` | Resolve NR-only only when Apply is pressed; restore a known earlier mode when leaving NR-only |
-| `LabLayout.java` | Native Overview/Bands/Speedtest/Tools view hierarchy, navigation, responsive cards/grid and staged-control presentation |
+| `LabLayout.java` | Native Overview/Bands/Signal/Speedtest/Tools view hierarchy, navigation, responsive cards/grid and staged-control presentation |
+| `SignalHunt.java` / `SignalHuntSession.java` | Host-tested freshness/comparison/session model and foreground selected-subscription NR observation adapter |
+| `SignalGaugeView.java` / `SignalTrendView.java` / `SignalFeedback.java` | Native signal gauge, actual-time graph and opt-in bounded sound |
 | `SpeedometerView.java`, `SpeedometerScale.java` | Unreleased native animated measured-average dial and host-tested scale |
 | `UiPresentation.java` | Pure Apply/draft/network display decisions, including stale/cached/unknown data handling |
 | `FiveGBands.java` | Render Android serving/unregistered NR observations without inventing detections |
@@ -1101,6 +1203,17 @@ environment-status tool and `/etc/codex/network-policy.json` were unavailable
 here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
+
+Current turn implements the selected native Gauge Signal tab, with docs and
+host/Java/DEX checks complete. Ask whether to build an APK, citing the existing
+AGENTS.md source-before-build preference. No Signal APK or new release has been
+built yet; 0.14 stays public and unchanged. After an authorized build, test Signal
+on the phone: selected SIM, Location/permission denial and settings return,
+actual timestamp/field availability, stale and LTE-only states, cell changes,
+marks, sound/silent mode, rotation, navigation/background pause, large fonts and
+screen-awake cleanup. Verify existing band controls and Speedtest remain usable.
+Do not claim host checks prove Android listener delivery or native rendering.
+The notes below retain outstanding on-phone validation.
 
 The authorized 0.14 fix, build, verification and public prerelease are complete.
 Next: install over 0.13 and run a fresh speed test. Both available rates should
