@@ -26,13 +26,14 @@ history. Never publish credentials or private device identifiers here.
   Native implementation, docs and host/Java/DEX checks are complete and source
   was published at fbf95b81a15a3df30f92f69a4070c5a52b575764. User then explicitly
   said **Yes build**. Build/sign/verify/publish 0.15 is now authorized, with no
-  further approval needed. The signed build and package/regression checks pass;
-  source/tag/release publication and public download verification are in progress.
-- Latest published APK: **0.14**, version code **14**, name `0.14-sa-test`,
+  further approval needed. Version 0.15 is built, signed, verified and publicly
+  released. The anonymous download matches the local signed APK. This request
+  is complete; on-phone validation remains pending.
+- Latest published APK: **0.15**, version code **15**, name `0.15-sa-test`,
   ARM64, minimum Android 11 / API 30, target API 34. Signed, verified and public
   as an experimental prerelease. Previous releases remain unchanged.
-- Public release: [v0.14.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.14.0).
-- [0.14 APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.14.0/sa-band-lab-0.14-arm64.apk).
+- Public release: [v0.15.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.15.0).
+- [0.15 APK download](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.15.0/sa-band-lab-0.15-arm64.apk).
 - **Latest modem mutation evidence remains the 0.9 phone report:** combined
   n78-only SA + NR-only Apply and modem readback succeeded, including the
   post-reboot fresh-baseline fix. The newer 0.11 report is a speed test only.
@@ -101,8 +102,15 @@ Version **0.15 / code 15 / 0.15-sa-test** has been built with the existing key.
   (15 EFS + 37 QMI) pass. No Android phone/emulator runtime tests are claimed.
 - Prior local 0.14 and 0.13 APK hashes are unchanged. Private signing material
   stays outside the public checkout and is not packaged or uploaded.
-- Source/tag publication, draft asset upload, public prerelease and anonymous
-  download comparison are the remaining delivery steps. Keep 0.14 intact.
+- Published [v0.15.0](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.15.0)
+  as a public experimental prerelease with APK and `SHA256SUMS.txt`. Its source
+  tag points to `b53aae656b2eac0e7ebdb35d59ba9a80265acb99`. Both draft assets
+  downloaded byte-for-byte equal to local files before publication. Anonymous
+  public APK download also matched the signed bytes and SHA-256. README links
+  directly to the 0.15 APK and release. Prior releases remain intact.
+- This build request is complete. The final context-only completion commit does
+  not change the tagged source or released APK. Live Signal/HyperOS behavior
+  still needs a phone test; no on-device success is claimed.
 
 ## Signal hunt: native Gauge implementation (2026-10-31)
 
@@ -151,7 +159,8 @@ SA_JAVA_HOME=/tmp/dietlog-java bash tests/test_five_g_bands.sh
 
 These first checks were compile/tests only. User subsequently said **Yes build**;
 0.15 / code 15 assembly, existing-key signing, package verification and a new
-GitHub prerelease are now authorized and in progress. Existing releases stay intact.
+GitHub prerelease are now complete, including public-download verification.
+Existing releases stay intact.
 Android/HyperOS callback,
 rendering, audio and lifecycle delivery still need phone validation.
 
@@ -1238,9 +1247,9 @@ here, so do not invent their status or use them as evidence of access.
 
 The selected native Gauge Signal tab and docs passed host/Java/DEX checks and
 were published as source. User explicitly approved the new build with **Yes build**.
-Build and publish 0.15 using the existing signing key; verify the package, release
-source/tag and anonymous download, then reconcile this context. No further
-approval is needed. After delivery, test Signal
+Version 0.15 is built with the existing key, verified and public; its source/tag
+and anonymous download are verified above. This task is complete and no build
+is pending. Install over the existing app and test Signal
 on the phone: selected SIM, Location/permission denial and settings return,
 actual timestamp/field availability, stale and LTE-only states, cell changes,
 marks, sound/silent mode, rotation, navigation/background pause, large fonts and
