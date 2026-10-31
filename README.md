@@ -17,15 +17,15 @@ meaningful checkpoint.
 
 ## Download the APK
 
-**[Download SA Band Lab 0.14 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.14.0/sa-band-lab-0.14-arm64.apk)**
+**[Download SA Band Lab 0.15 — ARM64 APK](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/download/v0.15.0/sa-band-lab-0.15-arm64.apk)**
 
-[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.14.0)
+[Release notes and checksums](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases/tag/v0.15.0)
 · [All releases](https://github.com/shadow-pheonix/NR-SA-Band-Locking/releases)
 
 Download the `.apk` file to install the app. GitHub's **Source code (zip)** is for
 developers and cannot be installed as an Android app.
 
-### In source: Signal hunt with a Gauge meter
+### Version 0.15: Signal hunt with a Gauge meter
 
 The new **Signal** tab sits between Bands and Speedtest. Start a hunt to see
 fresh serving-cell SS-RSRP, separate SINR/RSRQ, the best reading for the current
@@ -33,8 +33,8 @@ cell and a 60-second trend. Mark spots for this session or enable optional
 strength-pitched sound. Cell changes reset comparisons; stale/missing readings
 stay clearly unavailable. Sampling pauses when leaving the tab or app.
 
-**This feature is not in the published 0.14 APK yet.** Source tests and Android
-compilation pass; live phone behavior still needs validation. See the
+Included in **0.15**. Host tests and Android compilation pass; live phone
+behavior still needs validation. See the
 [Signal hunt guide](docs/SIGNAL_HUNT.md) for use and measurement limits.
 
 ### Version 0.14: keep speeds measured before an interruption

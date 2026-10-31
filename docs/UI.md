@@ -19,7 +19,7 @@ real grid contains only verified selectable bands for the chosen phone/SIM.
 
 ## Five destinations in current source
 
-**Signal is implemented in source and is not in the published 0.14 APK yet.**
+**Version 0.15 adds Signal between Bands and Speedtest.**
 
 | Destination | Purpose and actions |
 | --- | --- |
@@ -132,9 +132,10 @@ existing operation/controller boundary. The Android theme is in
 The new Signal source passes eight Java host suites, full Android Java and
 minimum-API-30 DEX compilation. Signal state tests cover fresh/stale timestamps,
 duplicates, out-of-order callbacks, cell/band resets, graph gaps, unknown fields,
-session mark limits and navigation migration. No APK has been built for Signal;
-its drawing, callbacks, audio, rotation and font scaling require phone checks
-after an authorized build. Existing published APK evidence below is historical.
+session mark limits and navigation migration. The signed 0.15 APK also passes
+AAPT2 packaging, ZIP alignment, signature and contents checks. Drawing, callbacks,
+audio, rotation and font scaling require phone checks.
+Existing published APK evidence below is historical.
 
 The signed 0.13 APK build passes, including Java/D8 and full AAPT2 resource
 linking. Package inspection confirms the adaptive/themed icon and theme. The original five Java

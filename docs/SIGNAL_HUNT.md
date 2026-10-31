@@ -1,6 +1,6 @@
 # Signal hunt — Gauge
 
-**Implemented in source; not included in the published 0.14 APK yet.**
+**Included in SA Band Lab 0.15.**
 The Signal tab sits between Bands and Speedtest. It reads Android's serving
 NR measurements for the selected SIM without changing modem preferences.
 

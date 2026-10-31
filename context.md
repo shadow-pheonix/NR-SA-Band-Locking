@@ -23,9 +23,11 @@ history. Never publish credentials or private device identifiers here.
   the interactive/PNG samples. Implement the native Signal tab between Bands
   and Speedtest, including the gauge, best reading, recent trend, per-SIM fresh
   serving observations, pause/resume, manual spot markers and opt-in sound.
-  Native implementation, docs and host/Java/DEX checks are complete. No APK
-  build requested for this new feature yet; ask after source delivery per
-  AGENTS.md. Earlier 0.14 build approval is fulfilled.
+  Native implementation, docs and host/Java/DEX checks are complete and source
+  was published at fbf95b81a15a3df30f92f69a4070c5a52b575764. User then explicitly
+  said **Yes build**. Build/sign/verify/publish 0.15 is now authorized, with no
+  further approval needed. The signed build and package/regression checks pass;
+  source/tag/release publication and public download verification are in progress.
 - Latest published APK: **0.14**, version code **14**, name `0.14-sa-test`,
   ARM64, minimum Android 11 / API 30, target API 34. Signed, verified and public
   as an experimental prerelease. Previous releases remain unchanged.
@@ -73,6 +75,35 @@ history. Never publish credentials or private device identifiers here.
   repository's `AGENTS.md`; README links to both. This documentation checkpoint
   also records the user's successful 0.9 manual Apply and permission questions.
 
+## Approved 0.15 build checkpoint (2026-10-31)
+
+User explicitly said **Yes build** after native Gauge source delivery at
+`fbf95b81a15a3df30f92f69a4070c5a52b575764`. No further build approval is needed.
+Version **0.15 / code 15 / 0.15-sa-test** has been built with the existing key.
+
+- APK `sa-band-lab-0.15-arm64.apk`: **169,525 bytes**.
+- APK SHA-256: `59be1a4825d49800f7c0be52c7fc76a8244c6bd276467251f5db925ca293b26f`.
+- ARM64 helper: **76,712 bytes**, SHA-256
+  `d271ff869efb6edc669d6ecf5fbce985f856822dc415f913bdf56f031dc7d6d0`.
+  QMI helper version label is 0.15; radio behavior is unchanged.
+- Full Java/D8/AAPT2/zipalign/sign build passes; v3 signature verified with
+  unchanged official certificate SHA-256
+  `c9d0695602ec1ede8245f7bcb39d3cf89ec9721927879b36b23d94c78d766fc7`.
+- Package `dev.saband.lab`, min API 30/target 34, ARM64 only. New Gauge, trend,
+  session, state and sound classes are present along with tile/speed classes.
+  All notices/licenses and packaged README match source; one matching native
+  helper, 16 KiB ELF load alignment, ZIP integrity and 4-byte ZIP alignment pass.
+  The available zipalign lacks the modern `-P` option; the helper is compressed
+  and extracted (`extractNativeLibs=true`), so its ELF alignment is checked
+  directly and the supported ZIP alignment check is used.
+- Eight Java suites pass, including Signal freshness/state/navigation tests.
+  Native transport/framing/deadline checks and **52 DIAG/QMI mock methods**
+  (15 EFS + 37 QMI) pass. No Android phone/emulator runtime tests are claimed.
+- Prior local 0.14 and 0.13 APK hashes are unchanged. Private signing material
+  stays outside the public checkout and is not packaged or uploaded.
+- Source/tag publication, draft asset upload, public prerelease and anonymous
+  download comparison are the remaining delivery steps. Keep 0.14 intact.
+
 ## Signal hunt: native Gauge implementation (2026-10-31)
 
 User selected **Implement gauge** after the PNG samples. Native implementation
@@ -107,8 +138,8 @@ Validation complete: eight core Java suites (including new SignalHuntTest),
 full Android Java compilation and minimum-API-30 DEX compilation pass. Tests cover timestamp freshness,
 deduplication/order, cell/band resets, independent quality, graph gaps/limits,
 mark limits/eligibility, missing identities/fields, scale and page migration.
-The usage guide is `docs/SIGNAL_HUNT.md`; README and UI documentation clearly
-label this source-only feature, leaving the published 0.14 download unchanged.
+The usage guide is `docs/SIGNAL_HUNT.md`. Source was published before the
+user approved the 0.15 build. README/UI/build metadata now prepare that release.
 `git diff --check` passes. Relevant commands:
 
 ```sh
@@ -118,8 +149,9 @@ SA_JAVA_HOME=/tmp/dietlog-java bash tests/test_five_g_bands.sh
 /tmp/dietlog-java/bin/java -cp /tmp/sa-build-tools/d8.jar com.android.tools.r8.D8 --min-api 30 --lib /tmp/sa-build-tools/android.jar --output build/signal-dex build/signal-classes.jar
 ```
 
-These are compile/test checks, not APK assembly/signing. No APK build or version
-bump is authorized for this feature yet. Source delivery includes this context.
+These first checks were compile/tests only. User subsequently said **Yes build**;
+0.15 / code 15 assembly, existing-key signing, package verification and a new
+GitHub prerelease are now authorized and in progress. Existing releases stay intact.
 Android/HyperOS callback,
 rendering, audio and lifecycle delivery still need phone validation.
 
@@ -163,8 +195,8 @@ layouts at 320/390/736px. Local screenshots are `signal-gauge.png` and
 `signal-outdoor.png` in the same directory. No Android/modem tests are needed
 for this preview-only work, and none are claimed. Await design feedback before
 implementing the app tab at that checkpoint. Gauge is now selected; implement
-it and run meaningful checks (completed above). No APK build is authorized for
-this new feature yet.
+it and run meaningful checks (completed above). The later **Yes build**
+authorizes the 0.15 APK/release; see the current state.
 
 ## Current fix: retain interrupted speed measurements (2026-10-29)
 
@@ -1204,10 +1236,11 @@ here, so do not invent their status or use them as evidence of access.
 
 ## Remaining work and next useful actions
 
-Current turn implements the selected native Gauge Signal tab, with docs and
-host/Java/DEX checks complete. Ask whether to build an APK, citing the existing
-AGENTS.md source-before-build preference. No Signal APK or new release has been
-built yet; 0.14 stays public and unchanged. After an authorized build, test Signal
+The selected native Gauge Signal tab and docs passed host/Java/DEX checks and
+were published as source. User explicitly approved the new build with **Yes build**.
+Build and publish 0.15 using the existing signing key; verify the package, release
+source/tag and anonymous download, then reconcile this context. No further
+approval is needed. After delivery, test Signal
 on the phone: selected SIM, Location/permission denial and settings return,
 actual timestamp/field availability, stale and LTE-only states, cell changes,
 marks, sound/silent mode, rotation, navigation/background pause, large fonts and

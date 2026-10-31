@@ -49,7 +49,7 @@ bash build.sh
 Outputs:
 
 ```text
-dist/sa-band-lab-0.14-arm64.apk
+dist/sa-band-lab-0.15-arm64.apk
 dist/sa-helper-arm64
 dist/artifacts.json
 ```
